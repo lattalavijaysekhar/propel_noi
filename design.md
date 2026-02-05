@@ -1,4 +1,4 @@
-# PropelNOI — Technical Design & Architecture
+# PropelNOI - Technical Design & Architecture
 **Author:** Vijay  
 **Date:** February 5, 2026  
 **Version:** 1.0  
@@ -799,3 +799,4 @@ This approach ensures data lineage while optimizing for different access pattern
 - **User Adoption**: > 80% monthly active usage
 
 This comprehensive design ensures PropelNOI delivers measurable value while maintaining cost-effectiveness and technical excellence.
+
