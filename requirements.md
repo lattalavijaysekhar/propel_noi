@@ -1,4 +1,4 @@
-# PropelNOI — Requirements.md (Hackathon)
+# PropelNOI - Requirements.md (Hackathon)
 
 ## 1. Problem Statement
 
@@ -85,7 +85,7 @@ Only the minimum AWS services required are used:
 
 ---
 
-## 6. Core Features — What We Do & Success Criteria
+## 6. Core Features & Success Criteria
 
 ### 6.1 NOI Predictor
 
@@ -162,4 +162,5 @@ PropelNOI demonstrates:
 - Data-driven decision making
 - Practical commercial value
 - Responsible and explainable AI
+
 - Focused use of AWS services
