@@ -1,4 +1,4 @@
-# PropelNOI - Requirements.md (Hackathon)
+# PropelNOI - Requirements
 
 ## 1. Problem Statement
 
@@ -164,3 +164,4 @@ PropelNOI demonstrates:
 - Responsible and explainable AI
 
 - Focused use of AWS services
+
