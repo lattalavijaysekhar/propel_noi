@@ -1,5 +1,5 @@
 # PropelNOI - Technical Design & Architecture
-**Author:** Vijay  
+**Author:** Vijay Sekhar Lattala
 **Date:** February 5, 2026  
 **Version:** 1.0  
 
@@ -458,6 +458,7 @@ For the hackathon implementation, the following assumptions are made:
 ---
 
 This comprehensive design ensures PropelNOI delivers measurable value while maintaining cost-effectiveness and technical excellence.
+
 
 
 
