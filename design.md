@@ -187,58 +187,18 @@ propel-noi-data-lake/
 
 ## 5. API Design
 
-### 5.1 REST API Endpoints
+The system exposes a minimal REST-based API through Amazon API Gateway.
 
-**Base URL**: `https://api.propelnoi.com/v1`
+### Core Endpoints
 
-```
-# NOI Forecasting
-GET    /properties/{id}/noi/forecast?months=12
-POST   /properties/batch/noi/forecast
-GET    /portfolio/noi/forecast
+GET  /properties/{id}/noi/forecast  
+GET  /properties/{id}/rent/analysis  
+GET  /properties/{id}/maintenance/risks  
+POST /copilot/query  
 
-# Market Analysis
-GET    /properties/{id}/rent/analysis
-GET    /properties/{id}/rent/recommendations
-POST   /properties/batch/rent/analysis
+All endpoints are backed by AWS Lambda functions and return JSON responses.
 
-# Maintenance Predictions
-GET    /properties/{id}/maintenance/risks
-GET    /properties/{id}/maintenance/schedule
-POST   /properties/batch/maintenance/risks
-
-# Copilot Interface
-POST   /copilot/query
-GET    /copilot/history/{session_id}
-POST   /copilot/scenario
-```
-
-### 5.2 WebSocket API (Real-time Updates)
-
-```
-# Connection Management
-wss://ws.propelnoi.com/v1/connect
-
-# Message Types
-{
-  "type": "noi_forecast_update",
-  "property_id": "prop_123",
-  "forecast": {...}
-}
-
-{
-  "type": "market_alert",
-  "alert_type": "rent_gap_detected",
-  "properties": [...]
-}
-
-{
-  "type": "maintenance_alert",
-  "property_id": "prop_123",
-  "risk_score": 85,
-  "estimated_cost": 5000
-}
-```
+Authentication is handled via Amazon Cognito (JWT-based).
 
 ---
 
@@ -291,94 +251,30 @@ wss://ws.propelnoi.com/v1/connect
 
 ---
 
-## 7. Security & Compliance
+## 7. Security Considerations
 
-### 7.1 Data Security
-
-- **Encryption**: AES-256 for data at rest (S3, DynamoDB)
-- **Transit**: TLS 1.3 for all API communications
-- **Access Control**: IAM roles with least privilege
-- **API Security**: API Gateway with rate limiting and authentication
-
-### 7.2 Authentication & Authorization
-
-```
-┌─────────────┐    ┌──────────────┐    ┌─────────────────┐
-│ User Login  │───▶│ Cognito      │───▶│ JWT Token       │
-│             │    │ User Pool    │    │ Validation      │
-└─────────────┘    └──────────────┘    └─────────────────┘
-                           │                      │
-                           ▼                      ▼
-                   ┌──────────────┐    ┌─────────────────┐
-                   │ Role-Based   │    │ API Gateway     │
-                   │ Permissions  │    │ Authorizer      │
-                   └──────────────┘    └─────────────────┘
-```
-
-### 7.3 Data Privacy
-
-- **Synthetic Data**: No real tenant or lease information
-- **Data Masking**: PII removal from all datasets
-- **Audit Logging**: CloudTrail for all data access
-- **Retention**: Automated data lifecycle policies
+- Data encrypted at rest (S3 default encryption)
+- TLS for API communication
+- IAM roles with least privilege
+- Synthetic data only (no PII)
 
 ---
 
-## 8. Monitoring & Observability
+## 8. Monitoring
 
-### 8.1 Application Monitoring
-
-- **Metrics**: CloudWatch for system metrics
-- **Logging**: Structured logging with correlation IDs
-- **Tracing**: X-Ray for distributed tracing
-- **Alerting**: SNS for critical system alerts
-
-### 8.2 ML Model Monitoring
-
-- **Model Drift**: SageMaker Model Monitor
-- **Performance**: Accuracy tracking over time
-- **Data Quality**: Input validation and anomaly detection
-- **Retraining**: Automated triggers based on performance degradation
-
-### 8.3 Business Metrics
-
-- **Forecast Accuracy**: MAPE tracking by property type
-- **User Engagement**: API usage and copilot interactions
-- **Value Generation**: Rent gap identification success rate
-- **System Performance**: Response times and availability
+- Amazon CloudWatch for logs and metrics
+- Basic error alerts via SNS
+- Manual validation of ML outputs during demo phase
 
 ---
 
 ## 9. Deployment Strategy
 
-### 9.1 Infrastructure as Code
+The system will be deployed using AWS console and basic CloudFormation templates.
 
-- **AWS CDK**: TypeScript for infrastructure definition
-- **Environment Management**: Dev, staging, production
-- **Configuration**: Parameter Store for environment-specific settings
-- **Secrets**: Secrets Manager for API keys and credentials
-
-### 9.2 CI/CD Pipeline
-
-```
-┌─────────────┐    ┌──────────────┐    ┌─────────────────┐
-│ Code Commit │───▶│ CodeBuild    │───▶│ CodePipeline    │
-│ (GitHub)    │    │ (Test/Build) │    │ (Deploy)        │
-└─────────────┘    └──────────────┘    └─────────────────┘
-                           │                      │
-                           ▼                      ▼
-                   ┌──────────────┐    ┌─────────────────┐
-                   │ Artifact     │    │ CloudFormation  │
-                   │ Store (S3)   │    │ Stacks          │
-                   └──────────────┘    └─────────────────┘
-```
-
-### 9.3 Rollback Strategy
-
-- **Blue/Green Deployment**: Lambda aliases for safe deployments
-- **Database Migrations**: Backward-compatible schema changes
-- **Model Versioning**: SageMaker model registry for rollbacks
-- **Feature Flags**: Runtime configuration for feature toggles
+- Single AWS region deployment
+- Serverless architecture (Lambda + S3 + API Gateway)
+- Manual deployment for hackathon submission
 
 ---
 
@@ -502,7 +398,6 @@ The overall architecture prioritizes:
 - Generated prescriptive financial recommendations
 - Reduced insight time from quarterly reviews to real-time analysis
 
-
 ---
 
 ## 14. Limitations & Assumptions
@@ -563,6 +458,7 @@ For the hackathon implementation, the following assumptions are made:
 ---
 
 This comprehensive design ensures PropelNOI delivers measurable value while maintaining cost-effectiveness and technical excellence.
+
 
 
 
