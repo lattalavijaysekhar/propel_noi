@@ -73,7 +73,7 @@ These goals are delivered through four core features:
 
 Only the minimum AWS services required are used:
 
-| Purpose | AWS Service |
+| Category | AWS Service |
 |------|------------|
 | Data storage | Amazon S3 |
 | Data preparation | AWS Glue |
@@ -154,6 +154,7 @@ Only the minimum AWS services required are used:
 - The system provides **decision support**, not automated execution
 
 ---
+
 
 
 
