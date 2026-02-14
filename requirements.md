@@ -4,7 +4,7 @@
 
 Real estate investors and property managers suffer from **"Data Blindness."**  
 
-While they maintain internal rent rolls and expense data, they lack **real-time visibility into how external market shifts**—such as inflation, competitor pricing, and zoning changes—impact **Net Operating Income (NOI)**.
+While they maintain internal rent rolls and expense data, they lack **real-time visibility into how external market shifts** such as inflation, competitor pricing, and zoning changes impact **Net Operating Income (NOI)**.
 
 As a result:
 - Decisions are made quarterly
@@ -164,4 +164,5 @@ PropelNOI demonstrates:
 - Responsible and explainable AI
 
 - Focused use of AWS services
+
 
