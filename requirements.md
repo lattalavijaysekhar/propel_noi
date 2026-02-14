@@ -155,14 +155,5 @@ Only the minimum AWS services required are used:
 
 ---
 
-## Hackathon Fit
-
-PropelNOI demonstrates:
-- Strong business relevance (NOI protection)
-- Data-driven decision making
-- Practical commercial value
-- Responsible and explainable AI
-
-- Focused use of AWS services
 
 
