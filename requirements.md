@@ -69,7 +69,7 @@ These goals are delivered through four core features:
 
 ---
 
-## 5. AWS Services Used (Limited for Hackathon)
+## 5. AWS Services Used
 
 Only the minimum AWS services required are used:
 
@@ -154,6 +154,7 @@ Only the minimum AWS services required are used:
 - The system provides **decision support**, not automated execution
 
 ---
+
 
 
 
