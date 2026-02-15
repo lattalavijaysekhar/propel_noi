@@ -402,65 +402,23 @@ The overall architecture prioritizes:
 
 ## 14. Limitations & Assumptions
 
-### 14.1 Assumptions
-
-For the hackathon implementation, the following assumptions are made:
-
-- Portfolio data is synthetic and does not contain real tenant or PII information.
-- Public market data (e.g., rental listings, inflation metrics) is sampled or simulated.
-- Forecasting models are trained on limited historical synthetic datasets.
-- System usage during demo is light and not production-scale.
-- Users are assumed to be investment analysts or property managers with basic financial literacy.
-- Internet connectivity and AWS service availability are stable during demo execution.
+- Portfolio & market data are synthetic (no real PII).
+- Forecasting models are trained on limited historical datasets.
+- Rent & maintenance models use simplified similarity and heuristic logic.
+- Batch processing only (no real-time ingestion).
+- LLM responses may be non-deterministic.
+- Cost estimates reflect hackathon-scale workloads only.
+- System provides advisory insights, not automated financial decisions.
 
 ---
 
-### 14.2 Technical Limitations
+## 15 Future Enhancements
 
-- NOI forecasts are based on limited synthetic historical data and may not reflect real-world volatility.
-- Rent comparison logic may rely on simplified similarity scoring rather than full production-grade scraping pipelines.
-- Maintenance risk model uses heuristic or small training datasets rather than extensive IoT or real asset data.
-- Bedrock copilot responses depend on prompt engineering and may occasionally produce non-deterministic outputs.
-- Real-time streaming ingestion is not implemented (batch-oriented processing only).
-- Security implementation is minimal (IAM roles, encryption by default), without enterprise-grade compliance controls.
-
----
-
-### 14.3 Cost & Scale Limitations
-
-- Cost estimates are based on hackathon-scale workloads only.
-- Production-scale usage (thousands of properties, high concurrent users) would require:
-  - Additional optimization
-  - Caching strategies
-  - API rate limiting
-  - Enhanced monitoring
-- Spot training jobs may experience interruptions (mitigated via checkpointing).
-
----
-
-### 14.4 Business Limitations
-
-- The system provides prescriptive insights but does not automate financial decisions.
-- ROI projections are simulated based on synthetic portfolio performance.
-- Zoning change impacts are modeled conceptually, not connected to live municipal data feeds.
-- Market-rent harmonization assumes comparable property data is sufficiently available.
-
----
-
-### 14.5 Future Enhancements
-
-- Integration with real listing APIs
-- Real-time streaming data ingestion (Kinesis)
-- Advanced anomaly detection for sudden NOI shifts
+- Real listing API integration
+- Real-time streaming (Kinesis)
+- Enterprise-grade governance & compliance controls
 - Multi-portfolio benchmarking
-- Enterprise-grade governance and audit tracking
 
 ---
 
 This comprehensive design ensures PropelNOI delivers measurable value while maintaining cost-effectiveness and technical excellence.
-
-
-
-
-
-
