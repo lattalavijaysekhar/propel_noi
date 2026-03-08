@@ -176,40 +176,29 @@ https://www.loom.com/share/21ef883d9f444b998e52d17bce0e803b
 PropelNOI: AI-Driven Margin Optimization for Real Estate Demonstration:
 https://www.loom.com/share/08a4e1eb784d4852b773b31e92ebc9dd
 
-
-
-
 ---
 
-# Repository Structure
-
-```
-propelnoi-ai-copilot/
-
-streamlit-app/
-notebooks/
-glue-jobs/
-lambda-functions/
-data-generation/
-architecture/
-README.md
-```
+# Limitations & Assumptions
+- Portfolio & market data are synthetic (no real PII).
+- Forecasting models are trained on limited historical datasets.
+- Rent & maintenance models use simplified similarity and heuristic logic.
+- Batch processing only (no real-time ingestion).
+- LLM responses may be non-deterministic.
+- System provides advisory insights, not automated financial decisions.
 
 ---
 
 # Future Enhancements
 
-Potential improvements include:
-
-- Tenant churn prediction
-- Dynamic rent optimization
-- Portfolio digital twin simulation
-- Real-time data pipelines
-- Expanded market data integration
-
+- Real listing API integration
+- Real-time streaming (Kinesis)
+- Enterprise-grade governance & compliance controls
+- Multi-portfolio benchmarking
+- Integration with real property management systems
+- Real-time data ingestion pipelines
+- Larger historical datasets for model training
 ---
 
-# Author
-
-Vijay Sekhar Lattala  
+## Author
+Created by [@lattalavijaysekhar] - feel free to contact me!
 AWS AI Hackathon Submission
