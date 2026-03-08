@@ -1,0 +1,48 @@
+{
+	"jobConfig": {
+		"name": "job-process-noi-deepar-forecast",
+		"description": "",
+		"role": "arn:aws:iam::798306367304:role/PropelNOI-Glue-Role",
+		"command": "glueetl",
+		"version": "5.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 2,
+		"maxCapacity": 2,
+		"jobRunQueuingEnabled": false,
+		"maxRetries": 0,
+		"timeout": 480,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "job-process-noi-deepar-forecast.py",
+		"scriptLocation": "s3://aws-glue-assets-798306367304-ap-south-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [
+			{
+				"key": "--conf",
+				"value": "spark.eventLog.rolling.enabled=true",
+				"existing": false
+			}
+		],
+		"tags": [],
+		"jobMode": "DEVELOPER_MODE",
+		"createdOn": "2026-03-08T04:05:56.801Z",
+		"developerMode": true,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-798306367304-ap-south-1/temporary/",
+		"glueHiveMetastore": true,
+		"etlAutoTuning": true,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"bookmark": "job-bookmark-disable",
+		"sparkPath": "s3://aws-glue-assets-798306367304-ap-south-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"maintenanceWindow": null
+	},
+	"hasBeenSaved": false,
+	"usageProfileName": null,
+	"script": "import sys\r\nimport json\r\nfrom datetime import datetime\r\nfrom dateutil.relativedelta import relativedelta\r\n\r\nfrom awsglue.utils import getResolvedOptions\r\nfrom pyspark.context import SparkContext\r\nfrom awsglue.context import GlueContext\r\nfrom awsglue.job import Job\r\nfrom pyspark.sql import functions as F\r\nfrom pyspark.sql.functions import to_date, col\r\n\r\nargs = getResolvedOptions(sys.argv, ['JOB_NAME'])\r\n\r\nsc = SparkContext()\r\nglueContext = GlueContext(sc)\r\nspark = glueContext.spark_session\r\n\r\njob = Job(glueContext)\r\njob.init(args['JOB_NAME'], args)\r\n\r\nbucket = \"propelnoi-vijay-datalake\"\r\n\r\n# ---------------------------------------------------\r\n# Paths\r\n# ---------------------------------------------------\r\nfeatures_path = f\"s3://{bucket}/outputs/output_noi_model_features/\"\r\ninference_input_path = f\"s3://{bucket}/modeling/noi_deepar/inference_input/inference.json\"\r\ninference_output_path = f\"s3://{bucket}/modeling/noi_deepar/inference_output/inference.json.out\"\r\nfinal_output_path = f\"s3://{bucket}/outputs/output_noi_forecast_ml/\"\r\n\r\nprediction_length = 12\r\n\r\n# ---------------------------------------------------\r\n# Helper: split concatenated JSON objects\r\n# Example:\r\n# {\"a\":1}{\"b\":2}\r\n# into:\r\n# ['{\"a\":1}', '{\"b\":2}']\r\n# ---------------------------------------------------\r\ndef split_json_objects(line):\r\n    objs = []\r\n    depth = 0\r\n    start = None\r\n\r\n    for i, ch in enumerate(line):\r\n        if ch == \"{\":\r\n            if depth == 0:\r\n                start = i\r\n            depth += 1\r\n        elif ch == \"}\":\r\n            depth -= 1\r\n            if depth == 0 and start is not None:\r\n                objs.append(line[start:i + 1])\r\n                start = None\r\n\r\n    return objs\r\n\r\n# ---------------------------------------------------\r\n# 1. Read source features\r\n# ---------------------------------------------------\r\nfeatures_df = spark.read.parquet(features_path).select(\"property_id\", \"month\")\r\n\r\n# Cast month to date safely\r\nfeatures_df = features_df.withColumn(\"month\", to_date(col(\"month\")))\r\nfeatures_df = features_df.filter(col(\"property_id\").isNotNull() & col(\"month\").isNotNull())\r\n\r\n# ---------------------------------------------------\r\n# 2. Build property_id <-> category mapping\r\n# Must match the inference/export jobs\r\n# ---------------------------------------------------\r\nproperty_ids = [\r\n    r[0]\r\n    for r in features_df.select(\"property_id\").distinct().orderBy(\"property_id\").collect()\r\n]\r\n\r\nproperty_to_cat = {pid: idx for idx, pid in enumerate(property_ids)}\r\ncat_to_property = {idx: pid for pid, idx in property_to_cat.items()}\r\n\r\n# ---------------------------------------------------\r\n# 3. Get last observed month per property\r\n# ---------------------------------------------------\r\nlast_month_rows = (\r\n    features_df.groupBy(\"property_id\")\r\n    .agg(F.max(\"month\").alias(\"last_month\"))\r\n    .collect()\r\n)\r\n\r\nlast_month_map = {row[\"property_id\"]: row[\"last_month\"] for row in last_month_rows}\r\n\r\n# ---------------------------------------------------\r\n# 4. Read inference input lines\r\n# ---------------------------------------------------\r\ninput_lines = sc.textFile(inference_input_path).collect()\r\ninput_lines = [line for line in input_lines if line and line.strip()]\r\n\r\n# ---------------------------------------------------\r\n# 5. Read and split inference output JSON objects\r\n# Handles concatenated objects in a single line\r\n# ---------------------------------------------------\r\nraw_output_lines = sc.textFile(inference_output_path).collect()\r\n\r\noutput_lines = []\r\nfor line in raw_output_lines:\r\n    if line and line.strip():\r\n        split_objs = split_json_objects(line)\r\n        output_lines.extend(split_objs)\r\n\r\nprint(f\"Input record count  : {len(input_lines)}\")\r\nprint(f\"Output record count : {len(output_lines)}\")\r\n\r\nif len(input_lines) != len(output_lines):\r\n    raise Exception(\r\n        f\"Input/output record count mismatch. \"\r\n        f\"Input={len(input_lines)}, Output={len(output_lines)}\"\r\n    )\r\n\r\n# ---------------------------------------------------\r\n# 6. Join input/output by order and flatten forecasts\r\n# ---------------------------------------------------\r\nrows = []\r\n\r\nfor input_line, output_line in zip(input_lines, output_lines):\r\n    input_obj = json.loads(input_line)\r\n    output_obj = json.loads(output_line)\r\n\r\n    cat_list = input_obj.get(\"cat\", [])\r\n    if not cat_list:\r\n        continue\r\n\r\n    cat_val = cat_list[0]\r\n    property_id = cat_to_property.get(cat_val)\r\n    if property_id is None:\r\n        continue\r\n\r\n    last_month = last_month_map.get(property_id)\r\n    if last_month is None:\r\n        continue\r\n\r\n    # Convert date object/string to datetime\r\n    if hasattr(last_month, \"strftime\"):\r\n        last_dt = datetime.strptime(last_month.strftime(\"%Y-%m-%d\"), \"%Y-%m-%d\")\r\n    else:\r\n        last_dt = datetime.strptime(str(last_month)[:10], \"%Y-%m-%d\")\r\n\r\n    mean_vals = output_obj.get(\"mean\", [])\r\n    quantiles = output_obj.get(\"quantiles\", {})\r\n    p10_vals = quantiles.get(\"0.1\", [])\r\n    p90_vals = quantiles.get(\"0.9\", [])\r\n\r\n    max_len = min(prediction_length, len(mean_vals))\r\n\r\n    for i in range(max_len):\r\n        forecast_month = (last_dt + relativedelta(months=i + 1)).strftime(\"%Y-%m-%d\")\r\n\r\n        rows.append((\r\n            property_id,\r\n            forecast_month,\r\n            float(mean_vals[i]) if i < len(mean_vals) else None,\r\n            float(p10_vals[i]) if i < len(p10_vals) else None,\r\n            float(p90_vals[i]) if i < len(p90_vals) else None,\r\n            \"BASELINE_ML\"\r\n        ))\r\n\r\nprint(f\"Forecast row count: {len(rows)}\")\r\n\r\nif len(rows) == 0:\r\n    raise Exception(\"No forecast rows were created from inference output.\")\r\n\r\n# ---------------------------------------------------\r\n# 7. Create final dataframe\r\n# ---------------------------------------------------\r\nschema = [\r\n    \"property_id\",\r\n    \"forecast_month\",\r\n    \"predicted_noi\",\r\n    \"lower_bound\",\r\n    \"upper_bound\",\r\n    \"scenario_type\"\r\n]\r\n\r\nfinal_df = spark.createDataFrame(rows, schema=schema)\r\nfinal_df = final_df.withColumn(\"forecast_month\", to_date(col(\"forecast_month\")))\r\n\r\n# ---------------------------------------------------\r\n# 8. Write final parquet output\r\n# ---------------------------------------------------\r\nfinal_df.write.mode(\"overwrite\").parquet(final_output_path)\r\n\r\nprint(f\"Wrote ML forecast output to: {final_output_path}\")\r\nprint(f\"Final row count: {final_df.count()}\")\r\n\r\njob.commit()"
+}

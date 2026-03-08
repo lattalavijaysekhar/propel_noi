@@ -1,0 +1,48 @@
+{
+	"jobConfig": {
+		"name": "job-process-worldbank",
+		"description": "",
+		"role": "arn:aws:iam::798306367304:role/PropelNOI-Glue-Role",
+		"command": "glueetl",
+		"version": "5.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 2,
+		"maxCapacity": 2,
+		"jobRunQueuingEnabled": false,
+		"maxRetries": 0,
+		"timeout": 480,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "job-process-worldbank.py",
+		"scriptLocation": "s3://aws-glue-assets-798306367304-ap-south-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [
+			{
+				"key": "--conf",
+				"value": "spark.eventLog.rolling.enabled=true",
+				"existing": false
+			}
+		],
+		"tags": [],
+		"jobMode": "DEVELOPER_MODE",
+		"createdOn": "2026-03-07T09:48:14.049Z",
+		"developerMode": true,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-798306367304-ap-south-1/temporary/",
+		"glueHiveMetastore": true,
+		"etlAutoTuning": true,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"bookmark": "job-bookmark-disable",
+		"sparkPath": "s3://aws-glue-assets-798306367304-ap-south-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"maintenanceWindow": null
+	},
+	"hasBeenSaved": false,
+	"usageProfileName": null,
+	"script": "import sys\r\nimport boto3\r\nfrom awsglue.utils import getResolvedOptions\r\nfrom pyspark.context import SparkContext\r\nfrom awsglue.context import GlueContext\r\nfrom awsglue.job import Job\r\nfrom pyspark.sql.functions import col\r\nfrom pyspark.sql.types import IntegerType, DoubleType\r\n\r\nargs = getResolvedOptions(sys.argv, ['JOB_NAME'])\r\n\r\nsc = SparkContext()\r\nglueContext = GlueContext(sc)\r\nspark = glueContext.spark_session\r\njob = Job(glueContext)\r\njob.init(args['JOB_NAME'], args)\r\n\r\nbucket = \"propelnoi-vijay-datalake\"\r\nprefix = \"raw/economic/worldbank/\"\r\noutput_path = f\"s3://{bucket}/processed/economic/worldbank/\"\r\n\r\n# Create S3 client\r\ns3 = boto3.client(\"s3\")\r\n\r\n# List files in raw folder\r\nresponse = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)\r\n\r\nfiles = [\r\n    obj[\"Key\"]\r\n    for obj in response.get(\"Contents\", [])\r\n    if obj[\"Key\"].endswith(\".csv\")\r\n]\r\n\r\nif not files:\r\n    raise Exception(\"No World Bank raw files found\")\r\n\r\n# Pick latest file (files contain date in name so sorting works)\r\nlatest_file = sorted(files)[-1]\r\n\r\nprint(f\"Processing latest file: {latest_file}\")\r\n\r\ninput_path = f\"s3://{bucket}/{latest_file}\"\r\n\r\n# Read only latest CSV\r\ndf = (\r\n    spark.read\r\n    .option(\"header\", \"true\")\r\n    .option(\"multiLine\", \"true\")\r\n    .csv(input_path)\r\n)\r\n\r\n# Select and rename columns\r\nprocessed_df = (\r\n    df.select(\r\n        col(\"REF_AREA_LABEL\").alias(\"country_name\"),\r\n        col(\"TIME_PERIOD\").cast(IntegerType()).alias(\"year\"),\r\n        col(\"OBS_VALUE\").cast(DoubleType()).alias(\"inflation_value\"),\r\n        col(\"INDICATOR\").alias(\"indicator_code\")\r\n    )\r\n    .filter(col(\"country_name\").isNotNull())\r\n    .filter(col(\"year\").isNotNull())\r\n    .filter(col(\"inflation_value\").isNotNull())\r\n    .filter(col(\"indicator_code\") == \"WB_WDI_FP_CPI_TOTL_ZG\")\r\n)\r\n\r\n# Write processed parquet\r\nprocessed_df.write.mode(\"overwrite\").parquet(output_path)\r\n\r\njob.commit()"
+}

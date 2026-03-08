@@ -1,1 +1,48 @@
-
+{
+	"jobConfig": {
+		"name": "job-process-insideairbnb",
+		"description": "",
+		"role": "arn:aws:iam::798306367304:role/PropelNOI-Glue-Role",
+		"command": "glueetl",
+		"version": "5.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 2,
+		"maxCapacity": 2,
+		"jobRunQueuingEnabled": false,
+		"maxRetries": 0,
+		"timeout": 480,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "job-process-insideairbnb.py",
+		"scriptLocation": "s3://aws-glue-assets-798306367304-ap-south-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [
+			{
+				"key": "--conf",
+				"value": "spark.eventLog.rolling.enabled=true",
+				"existing": false
+			}
+		],
+		"tags": [],
+		"jobMode": "DEVELOPER_MODE",
+		"createdOn": "2026-03-07T09:42:13.049Z",
+		"developerMode": true,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-798306367304-ap-south-1/temporary/",
+		"glueHiveMetastore": true,
+		"etlAutoTuning": true,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"bookmark": "job-bookmark-disable",
+		"sparkPath": "s3://aws-glue-assets-798306367304-ap-south-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"maintenanceWindow": null
+	},
+	"hasBeenSaved": false,
+	"usageProfileName": null,
+	"script": "import sys\r\nfrom functools import reduce\r\nfrom awsglue.utils import getResolvedOptions\r\nfrom pyspark.context import SparkContext\r\nfrom awsglue.context import GlueContext\r\nfrom awsglue.job import Job\r\nfrom pyspark.sql.functions import (\r\n    input_file_name, regexp_extract, lit, col, to_date,\r\n    regexp_replace\r\n)\r\nfrom pyspark.sql.types import DoubleType, IntegerType, LongType\r\nfrom pyspark.sql import DataFrame\r\n\r\nargs = getResolvedOptions(sys.argv, ['JOB_NAME'])\r\n\r\nsc = SparkContext()\r\nglueContext = GlueContext(sc)\r\nspark = glueContext.spark_session\r\njob = Job(glueContext)\r\njob.init(args['JOB_NAME'], args)\r\n\r\nbucket = \"propelnoi-vijay-datalake\"\r\noutput_path = f\"s3://{bucket}/processed/market/insideairbnb/\"\r\n\r\ncity_map = {\r\n    \"seattle\": \"Seattle\",\r\n    \"chicago\": \"Chicago\",\r\n    \"san_diego\": \"San Diego\",\r\n    \"washington_dc\": \"Washington D C\",\r\n    \"nashville\": \"Nashville\",\r\n    \"boston\": \"Boston\",\r\n}\r\n\r\ncity_dfs = []\r\n\r\nfor city_folder, city_name in city_map.items():\r\n    input_path = f\"s3://{bucket}/raw/market/insideairbnb/{city_folder}/*.csv.gz\"\r\n    print(f\"Reading city: {city_folder} from {input_path}\")\r\n\r\n    try:\r\n        df = (\r\n            spark.read\r\n            .option(\"header\", \"true\")\r\n            .option(\"multiLine\", \"true\")\r\n            .option(\"quote\", '\"')\r\n            .option(\"escape\", '\"')\r\n            .option(\"mode\", \"PERMISSIVE\")\r\n            .option(\"ignoreLeadingWhiteSpace\", \"true\")\r\n            .option(\"ignoreTrailingWhiteSpace\", \"true\")\r\n            .csv(input_path)\r\n        )\r\n\r\n        raw_count = df.count()\r\n        print(f\"{city_folder} raw rows: {raw_count}\")\r\n\r\n        if raw_count == 0:\r\n            print(f\"{city_folder}: no rows found, skipping\")\r\n            continue\r\n\r\n        df = df.withColumn(\"source_file\", input_file_name())\r\n\r\n        df = df.withColumn(\r\n            \"snapshot_date\",\r\n            to_date(\r\n                regexp_extract(\r\n                    col(\"source_file\"),\r\n                    r\"listings_(\\d{4}-\\d{2}-\\d{2})\\.csv\\.gz\",\r\n                    1\r\n                ),\r\n                \"yyyy-MM-dd\"\r\n            )\r\n        )\r\n\r\n        # Clean price like \"$120.00\" -> 120.00\r\n        df = df.withColumn(\"price\", regexp_replace(col(\"price\"), \"[$,]\", \"\").cast(DoubleType()))\r\n        df = df.withColumn(\"minimum_nights\", col(\"minimum_nights\").cast(IntegerType()))\r\n        df = df.withColumn(\"availability_365\", col(\"availability_365\").cast(IntegerType()))\r\n        df = df.withColumn(\"number_of_reviews\", col(\"number_of_reviews\").cast(IntegerType()))\r\n        df = df.withColumn(\"review_scores_rating\", col(\"review_scores_rating\").cast(DoubleType()))\r\n        df = df.withColumn(\"latitude\", col(\"latitude\").cast(DoubleType()))\r\n        df = df.withColumn(\"longitude\", col(\"longitude\").cast(DoubleType()))\r\n        df = df.withColumn(\"listing_id\", col(\"id\").cast(LongType()))\r\n\r\n        final_df = df.select(\r\n            \"listing_id\",\r\n            lit(city_name).alias(\"city\"),\r\n            lit(\"United States\").alias(\"country\"),\r\n            col(\"neighbourhood_cleansed\").alias(\"neighbourhood\"),\r\n            col(\"room_type\"),\r\n            col(\"price\"),\r\n            col(\"minimum_nights\"),\r\n            col(\"availability_365\"),\r\n            col(\"number_of_reviews\"),\r\n            col(\"review_scores_rating\"),\r\n            col(\"latitude\"),\r\n            col(\"longitude\"),\r\n            col(\"snapshot_date\")\r\n        )\r\n\r\n        before_filter = final_df.count()\r\n        print(f\"{city_folder} rows before filter: {before_filter}\")\r\n\r\n        final_df = final_df.filter(\r\n            col(\"listing_id\").isNotNull() &\r\n            col(\"city\").isNotNull() &\r\n            col(\"latitude\").isNotNull() &\r\n            col(\"longitude\").isNotNull()\r\n        )\r\n\r\n        after_filter = final_df.count()\r\n        print(f\"{city_folder} rows after filter: {after_filter}\")\r\n\r\n        if after_filter > 0:\r\n            city_dfs.append(final_df)\r\n        else:\r\n            print(f\"{city_folder}: all rows dropped after filter\")\r\n\r\n    except Exception as e:\r\n        print(f\"Error processing {city_folder}: {str(e)}\")\r\n\r\nif not city_dfs:\r\n    raise Exception(\"No city data was successfully processed.\")\r\n\r\ncombined_df = reduce(DataFrame.unionByName, city_dfs)\r\n\r\nprint(f\"Total combined rows: {combined_df.count()}\")\r\n\r\ncombined_df.write.mode(\"overwrite\").partitionBy(\"city\").parquet(output_path)\r\n\r\njob.commit()"
+}

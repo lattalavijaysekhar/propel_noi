@@ -1,0 +1,48 @@
+{
+	"jobConfig": {
+		"name": "job-curated-noi-features",
+		"description": "",
+		"role": "arn:aws:iam::798306367304:role/PropelNOI-Glue-Role",
+		"command": "glueetl",
+		"version": "5.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 2,
+		"maxCapacity": 2,
+		"jobRunQueuingEnabled": false,
+		"maxRetries": 0,
+		"timeout": 480,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "job-curated-noi-features.py",
+		"scriptLocation": "s3://aws-glue-assets-798306367304-ap-south-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [
+			{
+				"key": "--conf",
+				"value": "spark.eventLog.rolling.enabled=true",
+				"existing": false
+			}
+		],
+		"tags": [],
+		"jobMode": "DEVELOPER_MODE",
+		"createdOn": "2026-03-07T14:53:35.192Z",
+		"developerMode": true,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-798306367304-ap-south-1/temporary/",
+		"glueHiveMetastore": true,
+		"etlAutoTuning": true,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"bookmark": "job-bookmark-disable",
+		"sparkPath": "s3://aws-glue-assets-798306367304-ap-south-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"maintenanceWindow": null
+	},
+	"hasBeenSaved": false,
+	"usageProfileName": null,
+	"script": "import sys\r\nfrom awsglue.utils import getResolvedOptions\r\nfrom pyspark.context import SparkContext\r\nfrom awsglue.context import GlueContext\r\nfrom awsglue.job import Job\r\nfrom pyspark.sql.functions import col, year, sum as spark_sum, coalesce, lit, max as spark_max\r\nfrom pyspark.sql.types import DoubleType\r\n\r\nargs = getResolvedOptions(sys.argv, ['JOB_NAME'])\r\n\r\nsc = SparkContext()\r\nglueContext = GlueContext(sc)\r\nspark = glueContext.spark_session\r\njob = Job(glueContext)\r\njob.init(args['JOB_NAME'], args)\r\n\r\nbucket = \"propelnoi-vijay-datalake\"\r\n\r\nrent_roll_path = f\"s3://{bucket}/processed/portfolio/rent_roll/\"\r\nopex_path = f\"s3://{bucket}/processed/portfolio/opex/\"\r\nworldbank_path = f\"s3://{bucket}/processed/economic/worldbank/\"\r\noutput_path = f\"s3://{bucket}/curated/noi_features/\"\r\n\r\n# Read processed parquet datasets\r\nrent_roll_df = spark.read.parquet(rent_roll_path)\r\nopex_df = spark.read.parquet(opex_path)\r\nworldbank_df = spark.read.parquet(worldbank_path)\r\n\r\n# Aggregate rent\r\nrent_agg = (\r\n    rent_roll_df\r\n    .groupBy(\"property_id\", \"month\")\r\n    .agg(\r\n        spark_sum(col(\"rent_income\")).alias(\"total_rent_income\")\r\n    )\r\n)\r\n\r\n# Aggregate opex\r\nopex_agg = (\r\n    opex_df\r\n    .groupBy(\"property_id\", \"month\")\r\n    .agg(\r\n        spark_sum(col(\"operating_expense\")).alias(\"total_opex\")\r\n    )\r\n)\r\n\r\n# Join rent + opex\r\nnoi_df = (\r\n    rent_agg.alias(\"r\")\r\n    .join(\r\n        opex_agg.alias(\"o\"),\r\n        on=[\r\n            col(\"r.property_id\") == col(\"o.property_id\"),\r\n            col(\"r.month\") == col(\"o.month\")\r\n        ],\r\n        how=\"left\"\r\n    )\r\n    .select(\r\n        col(\"r.property_id\").alias(\"property_id\"),\r\n        col(\"r.month\").alias(\"month\"),\r\n        col(\"r.total_rent_income\").alias(\"total_rent_income\"),\r\n        coalesce(col(\"o.total_opex\"), lit(0.0)).alias(\"total_opex\")\r\n    )\r\n    .withColumn(\r\n        \"noi\",\r\n        col(\"total_rent_income\") - col(\"total_opex\")\r\n    )\r\n)\r\n\r\n# Keep only United States inflation\r\ninflation_us = (\r\n    worldbank_df\r\n    .filter(col(\"country_name\") == \"United States\")\r\n    .select(\r\n        col(\"year\").alias(\"inflation_year\"),\r\n        col(\"inflation_value\").cast(DoubleType()).alias(\"inflation_rate\")\r\n    )\r\n)\r\n\r\n# Get latest available inflation year\r\nlatest_year = inflation_us.agg(spark_max(\"inflation_year\").alias(\"max_year\")).collect()[0][\"max_year\"]\r\n\r\n# Get latest available inflation value\r\nlatest_inflation_rate = (\r\n    inflation_us\r\n    .filter(col(\"inflation_year\") == lit(latest_year))\r\n    .select(\"inflation_rate\")\r\n    .collect()[0][\"inflation_rate\"]\r\n)\r\n\r\n# Exact join first\r\nfinal_df = (\r\n    noi_df.alias(\"n\")\r\n    .join(\r\n        inflation_us.alias(\"i\"),\r\n        year(col(\"n.month\")) == col(\"i.inflation_year\"),\r\n        how=\"left\"\r\n    )\r\n    .select(\r\n        col(\"n.property_id\"),\r\n        col(\"n.month\"),\r\n        col(\"n.total_rent_income\"),\r\n        col(\"n.total_opex\"),\r\n        col(\"n.noi\"),\r\n        coalesce(col(\"i.inflation_rate\"), lit(latest_inflation_rate)).alias(\"inflation_rate\")\r\n    )\r\n)\r\n\r\n# Write curated parquet\r\nfinal_df.write.mode(\"overwrite\").parquet(output_path)\r\n\r\njob.commit()"
+}

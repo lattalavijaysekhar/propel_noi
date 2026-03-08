@@ -1,0 +1,48 @@
+{
+	"jobConfig": {
+		"name": "job-export-maintenance-training",
+		"description": "",
+		"role": "arn:aws:iam::798306367304:role/PropelNOI-Glue-Role",
+		"command": "glueetl",
+		"version": "5.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 2,
+		"maxCapacity": 2,
+		"jobRunQueuingEnabled": false,
+		"maxRetries": 0,
+		"timeout": 480,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "job-export-maintenance-training.py",
+		"scriptLocation": "s3://aws-glue-assets-798306367304-ap-south-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [
+			{
+				"key": "--conf",
+				"value": "spark.eventLog.rolling.enabled=true",
+				"existing": false
+			}
+		],
+		"tags": [],
+		"jobMode": "DEVELOPER_MODE",
+		"createdOn": "2026-03-08T07:49:26.622Z",
+		"developerMode": true,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-798306367304-ap-south-1/temporary/",
+		"glueHiveMetastore": true,
+		"etlAutoTuning": true,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"bookmark": "job-bookmark-disable",
+		"sparkPath": "s3://aws-glue-assets-798306367304-ap-south-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"maintenanceWindow": null
+	},
+	"hasBeenSaved": false,
+	"usageProfileName": null,
+	"script": "import sys\r\nfrom awsglue.utils import getResolvedOptions\r\nfrom pyspark.context import SparkContext\r\nfrom awsglue.context import GlueContext\r\nfrom awsglue.job import Job\r\nfrom pyspark.ml.feature import StringIndexer\r\nfrom pyspark.sql.functions import col, coalesce, lit\r\n\r\nargs = getResolvedOptions(sys.argv, ['JOB_NAME'])\r\n\r\nsc = SparkContext()\r\nglueContext = GlueContext(sc)\r\nspark = glueContext.spark_session\r\njob = Job(glueContext)\r\njob.init(args['JOB_NAME'], args)\r\n\r\nbucket = \"propelnoi-vijay-datalake\"\r\n\r\ninput_path = f\"s3://{bucket}/outputs/output_maintenance_training/\"\r\ntrain_path = f\"s3://{bucket}/modeling/maintenance_rf/train/\"\r\nval_path = f\"s3://{bucket}/modeling/maintenance_rf/validation/\"\r\n\r\ndf = spark.read.parquet(input_path)\r\n\r\n# Encode categoricals\r\ncity_indexer = StringIndexer(inputCol=\"city\", outputCol=\"city_idx\", handleInvalid=\"keep\")\r\nptype_indexer = StringIndexer(inputCol=\"property_type\", outputCol=\"property_type_idx\", handleInvalid=\"keep\")\r\nsystem_indexer = StringIndexer(inputCol=\"system_type\", outputCol=\"system_type_idx\", handleInvalid=\"keep\")\r\n\r\ndf = city_indexer.fit(df).transform(df)\r\ndf = ptype_indexer.fit(df).transform(df)\r\ndf = system_indexer.fit(df).transform(df)\r\n\r\n# Target first for SageMaker XGBoost/CSV style\r\nfinal_df = df.select(\r\n    coalesce(col(\"is_high_risk\"), lit(0)).alias(\"is_high_risk\"),\r\n    coalesce(col(\"city_idx\"), lit(0.0)).alias(\"city_idx\"),\r\n    coalesce(col(\"property_type_idx\"), lit(0.0)).alias(\"property_type_idx\"),\r\n    coalesce(col(\"system_type_idx\"), lit(0.0)).alias(\"system_type_idx\"),\r\n    coalesce(col(\"units\"), lit(0)).alias(\"units\"),\r\n    coalesce(col(\"repair_cost\"), lit(0.0)).alias(\"repair_cost\"),\r\n    coalesce(col(\"asset_age\"), lit(0)).alias(\"asset_age\"),\r\n    coalesce(col(\"avg_repair_cost_3m\"), lit(0.0)).alias(\"avg_repair_cost_3m\"),\r\n    coalesce(col(\"risk_score\"), lit(0.0)).alias(\"risk_score\")\r\n)\r\n\r\ntrain_df, val_df = final_df.randomSplit([0.8, 0.2], seed=42)\r\n\r\ntrain_df.coalesce(1).write.mode(\"overwrite\").option(\"header\", \"false\").csv(train_path)\r\nval_df.coalesce(1).write.mode(\"overwrite\").option(\"header\", \"false\").csv(val_path)\r\n\r\njob.commit()"
+}

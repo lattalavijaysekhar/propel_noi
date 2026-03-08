@@ -1,0 +1,48 @@
+{
+	"jobConfig": {
+		"name": "job-curated-market-rent-features",
+		"description": "",
+		"role": "arn:aws:iam::798306367304:role/PropelNOI-Glue-Role",
+		"command": "glueetl",
+		"version": "5.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 2,
+		"maxCapacity": 2,
+		"jobRunQueuingEnabled": false,
+		"maxRetries": 0,
+		"timeout": 480,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "job-curated-market-rent-features.py",
+		"scriptLocation": "s3://aws-glue-assets-798306367304-ap-south-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [
+			{
+				"key": "--conf",
+				"value": "spark.eventLog.rolling.enabled=true",
+				"existing": false
+			}
+		],
+		"tags": [],
+		"jobMode": "DEVELOPER_MODE",
+		"createdOn": "2026-03-07T15:05:45.918Z",
+		"developerMode": true,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-798306367304-ap-south-1/temporary/",
+		"glueHiveMetastore": true,
+		"etlAutoTuning": true,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"bookmark": "job-bookmark-disable",
+		"sparkPath": "s3://aws-glue-assets-798306367304-ap-south-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"maintenanceWindow": null
+	},
+	"hasBeenSaved": false,
+	"usageProfileName": null,
+	"script": "import sys\r\nfrom awsglue.utils import getResolvedOptions\r\nfrom pyspark.context import SparkContext\r\nfrom awsglue.context import GlueContext\r\nfrom awsglue.job import Job\r\nfrom pyspark.sql.functions import (\r\n    col,\r\n    year,\r\n    avg as spark_avg,\r\n    lower,\r\n    regexp_replace,\r\n    trim,\r\n    coalesce,\r\n    lit,\r\n    max as spark_max\r\n)\r\nfrom pyspark.sql.types import DoubleType\r\n\r\nargs = getResolvedOptions(sys.argv, ['JOB_NAME'])\r\n\r\nsc = SparkContext()\r\nglueContext = GlueContext(sc)\r\nspark = glueContext.spark_session\r\njob = Job(glueContext)\r\njob.init(args['JOB_NAME'], args)\r\n\r\nbucket = \"propelnoi-vijay-datalake\"\r\n\r\nproperties_path = f\"s3://{bucket}/processed/portfolio/properties/\"\r\nrent_roll_path = f\"s3://{bucket}/processed/portfolio/rent_roll/\"\r\ninsideairbnb_path = f\"s3://{bucket}/processed/market/insideairbnb/\"\r\nworldbank_path = f\"s3://{bucket}/processed/economic/worldbank/\"\r\noutput_path = f\"s3://{bucket}/curated/market_rent_features/\"\r\n\r\n# Read processed datasets\r\nproperties_df = spark.read.parquet(properties_path)\r\nrent_roll_df = spark.read.parquet(rent_roll_path)\r\ninsideairbnb_df = spark.read.parquet(insideairbnb_path)\r\nworldbank_df = spark.read.parquet(worldbank_path)\r\n\r\n# Portfolio monthly average rent\r\nportfolio_rent_df = (\r\n    rent_roll_df\r\n    .groupBy(\"property_id\", \"month\")\r\n    .agg(\r\n        spark_avg(col(\"rent_income\")).alias(\"avg_portfolio_rent\")\r\n    )\r\n)\r\n\r\n# Add city and normalized city key\r\nportfolio_with_city_df = (\r\n    portfolio_rent_df.alias(\"r\")\r\n    .join(\r\n        properties_df.select(\"property_id\", \"city\").alias(\"p\"),\r\n        col(\"r.property_id\") == col(\"p.property_id\"),\r\n        \"left\"\r\n    )\r\n    .select(\r\n        col(\"r.property_id\").alias(\"property_id\"),\r\n        col(\"r.month\").alias(\"month\"),\r\n        col(\"p.city\").alias(\"city\"),\r\n        col(\"r.avg_portfolio_rent\").alias(\"avg_portfolio_rent\")\r\n    )\r\n    .withColumn(\r\n        \"city_key\",\r\n        lower(\r\n            regexp_replace(\r\n                regexp_replace(\r\n                    regexp_replace(trim(col(\"city\")), \",\", \"\"),\r\n                    \"\\\\.\", \"\"\r\n                ),\r\n                \"\\\\s+\",\r\n                \"_\"\r\n            )\r\n        )\r\n    )\r\n)\r\n\r\n# Market benchmark by normalized city\r\nmarket_rent_df = (\r\n    insideairbnb_df\r\n    .withColumn(\r\n        \"city_key\",\r\n        lower(\r\n            regexp_replace(\r\n                regexp_replace(\r\n                    regexp_replace(trim(col(\"city\")), \",\", \"\"),\r\n                    \"\\\\.\", \"\"\r\n                ),\r\n                \"\\\\s+\",\r\n                \"_\"\r\n            )\r\n        )\r\n    )\r\n    .groupBy(\"city_key\")\r\n    .agg(\r\n        spark_avg(col(\"price\")).alias(\"avg_market_rent\")\r\n    )\r\n)\r\n\r\n# United States inflation\r\ninflation_df = (\r\n    worldbank_df\r\n    .filter(col(\"country_name\") == \"United States\")\r\n    .select(\r\n        col(\"year\").alias(\"inflation_year\"),\r\n        col(\"inflation_value\").cast(DoubleType()).alias(\"inflation_rate\")\r\n    )\r\n)\r\n\r\n# Latest available inflation year/value for fallback\r\nlatest_year = (\r\n    inflation_df\r\n    .agg(spark_max(\"inflation_year\").alias(\"max_year\"))\r\n    .collect()[0][\"max_year\"]\r\n)\r\n\r\nlatest_inflation_rate = (\r\n    inflation_df\r\n    .filter(col(\"inflation_year\") == lit(latest_year))\r\n    .select(\"inflation_rate\")\r\n    .collect()[0][\"inflation_rate\"]\r\n)\r\n\r\n# Join portfolio + market + inflation\r\njoined_df = (\r\n    portfolio_with_city_df.alias(\"pf\")\r\n    .join(\r\n        market_rent_df.alias(\"m\"),\r\n        col(\"pf.city_key\") == col(\"m.city_key\"),\r\n        \"left\"\r\n    )\r\n    .join(\r\n        inflation_df.alias(\"i\"),\r\n        year(col(\"pf.month\")) == col(\"i.inflation_year\"),\r\n        \"left\"\r\n    )\r\n)\r\n\r\n# Calculate recommended rent and rent gap with inflation fallback\r\nfinal_df = (\r\n    joined_df\r\n    .withColumn(\r\n        \"inflation_rate\",\r\n        coalesce(col(\"i.inflation_rate\"), lit(latest_inflation_rate))\r\n    )\r\n    .withColumn(\r\n        \"recommended_rent\",\r\n        col(\"avg_market_rent\") * (1 + col(\"inflation_rate\") / 100)\r\n    )\r\n    .withColumn(\r\n        \"rent_gap\",\r\n        col(\"avg_portfolio_rent\") - col(\"recommended_rent\")\r\n    )\r\n    .select(\r\n        col(\"pf.property_id\").alias(\"property_id\"),\r\n        col(\"pf.month\").alias(\"month\"),\r\n        col(\"pf.city\").alias(\"city\"),\r\n        col(\"avg_portfolio_rent\"),\r\n        col(\"avg_market_rent\"),\r\n        col(\"recommended_rent\"),\r\n        col(\"rent_gap\"),\r\n        col(\"inflation_rate\")\r\n    )\r\n)\r\n\r\n# Write curated dataset\r\nfinal_df.write.mode(\"overwrite\").parquet(output_path)\r\n\r\njob.commit()"
+}

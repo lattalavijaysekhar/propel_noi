@@ -1,0 +1,48 @@
+{
+	"jobConfig": {
+		"name": "job-process-portfolio",
+		"description": "",
+		"role": "arn:aws:iam::798306367304:role/PropelNOI-Glue-Role",
+		"command": "glueetl",
+		"version": "5.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 2,
+		"maxCapacity": 2,
+		"jobRunQueuingEnabled": false,
+		"maxRetries": 0,
+		"timeout": 480,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "job-process-portfolio.py",
+		"scriptLocation": "s3://aws-glue-assets-798306367304-ap-south-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [
+			{
+				"key": "--conf",
+				"value": "spark.eventLog.rolling.enabled=true",
+				"existing": false
+			}
+		],
+		"tags": [],
+		"jobMode": "DEVELOPER_MODE",
+		"createdOn": "2026-03-07T10:40:02.808Z",
+		"developerMode": true,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-798306367304-ap-south-1/temporary/",
+		"glueHiveMetastore": true,
+		"etlAutoTuning": true,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"bookmark": "job-bookmark-disable",
+		"sparkPath": "s3://aws-glue-assets-798306367304-ap-south-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"maintenanceWindow": null
+	},
+	"hasBeenSaved": false,
+	"usageProfileName": null,
+	"script": "import sys\r\nfrom awsglue.utils import getResolvedOptions\r\nfrom pyspark.context import SparkContext\r\nfrom awsglue.context import GlueContext\r\nfrom awsglue.job import Job\r\nfrom pyspark.sql.functions import col, regexp_replace, to_date\r\nfrom pyspark.sql.types import IntegerType, DoubleType\r\n\r\nargs = getResolvedOptions(sys.argv, ['JOB_NAME'])\r\nsc = SparkContext()\r\nglueContext = GlueContext(sc)\r\nspark = glueContext.spark_session\r\njob = Job(glueContext)\r\njob.init(args['JOB_NAME'], args)\r\n\r\nbucket = \"propelnoi-vijay-datalake\"\r\n\r\n# ---------- Read raw files ----------\r\nproperties_path = f\"s3://{bucket}/raw/portfolio/properties/\"\r\nrent_roll_path = f\"s3://{bucket}/raw/portfolio/rent_roll/\"\r\nopex_path = f\"s3://{bucket}/raw/portfolio/opex/\"\r\nmaintenance_path = f\"s3://{bucket}/raw/portfolio/maintenance/\"\r\n\r\nproperties_out = f\"s3://{bucket}/processed/portfolio/properties/\"\r\nrent_roll_out = f\"s3://{bucket}/processed/portfolio/rent_roll/\"\r\nopex_out = f\"s3://{bucket}/processed/portfolio/opex/\"\r\nmaintenance_out = f\"s3://{bucket}/processed/portfolio/maintenance/\"\r\n\r\nproperties = spark.read.option(\"header\", \"true\").csv(properties_path)\r\nrent_roll = spark.read.option(\"header\", \"true\").csv(rent_roll_path)\r\nopex = spark.read.option(\"header\", \"true\").csv(opex_path)\r\nmaintenance = spark.read.option(\"header\", \"true\").csv(maintenance_path)\r\n\r\n# ---------- Clean properties ----------\r\nproperties = (\r\n    properties\r\n    .withColumn(\"city\", regexp_replace(col(\"city\"), \"^Washington, D\\\\.C\\\\.$\", \"Washington DC\"))\r\n    .withColumn(\"units\", col(\"units\").cast(IntegerType()))\r\n    .withColumn(\"built_year\", col(\"built_year\").cast(IntegerType()))\r\n    .select(\"property_id\", \"property_name\", \"city\", \"country\", \"property_type\", \"units\", \"built_year\")\r\n)\r\n\r\n# ---------- Clean rent_roll ----------\r\nrent_roll = (\r\n    rent_roll\r\n    .withColumn(\"month\", to_date(col(\"month\"), \"yyyy-MM\"))\r\n    .withColumn(\"rent_income\", col(\"rent_income\").cast(DoubleType()))\r\n    .withColumn(\"occupancy_rate\", col(\"occupancy_rate\").cast(DoubleType()))\r\n    .select(\"property_id\", \"unit_id\", \"month\", \"rent_income\", \"occupancy_rate\")\r\n)\r\n\r\n# ---------- Clean opex ----------\r\nopex = (\r\n    opex\r\n    .withColumn(\"month\", to_date(col(\"month\"), \"yyyy-MM\"))\r\n    .withColumn(\"operating_expense\", col(\"operating_expense\").cast(DoubleType()))\r\n    .select(\"property_id\", \"month\", \"operating_expense\")\r\n)\r\n\r\n# ---------- Clean maintenance ----------\r\nmaintenance = (\r\n    maintenance\r\n    .withColumn(\"month\", to_date(col(\"month\"), \"yyyy-MM\"))\r\n    .withColumn(\"repair_cost\", col(\"repair_cost\").cast(DoubleType()))\r\n    .withColumn(\"asset_age\", col(\"asset_age\").cast(IntegerType()))\r\n    .select(\"property_id\", \"system_type\", \"month\", \"repair_cost\", \"asset_age\")\r\n)\r\n\r\n# ---------- Write processed parquet ----------\r\nproperties.write.mode(\"overwrite\").parquet(properties_out)\r\nrent_roll.write.mode(\"overwrite\").parquet(rent_roll_out)\r\nopex.write.mode(\"overwrite\").parquet(opex_out)\r\nmaintenance.write.mode(\"overwrite\").parquet(maintenance_out)\r\n\r\njob.commit()"
+}

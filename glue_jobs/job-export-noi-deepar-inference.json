@@ -1,0 +1,48 @@
+{
+	"jobConfig": {
+		"name": "job-export-noi-deepar-inference",
+		"description": "",
+		"role": "arn:aws:iam::798306367304:role/PropelNOI-Glue-Role",
+		"command": "glueetl",
+		"version": "5.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 2,
+		"maxCapacity": 2,
+		"jobRunQueuingEnabled": false,
+		"maxRetries": 0,
+		"timeout": 480,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "job-export-noi-deepar-inference.py",
+		"scriptLocation": "s3://aws-glue-assets-798306367304-ap-south-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [
+			{
+				"key": "--conf",
+				"value": "spark.eventLog.rolling.enabled=true",
+				"existing": false
+			}
+		],
+		"tags": [],
+		"jobMode": "DEVELOPER_MODE",
+		"createdOn": "2026-03-08T01:48:50.151Z",
+		"developerMode": true,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-798306367304-ap-south-1/temporary/",
+		"glueHiveMetastore": true,
+		"etlAutoTuning": true,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"bookmark": "job-bookmark-disable",
+		"sparkPath": "s3://aws-glue-assets-798306367304-ap-south-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"maintenanceWindow": null
+	},
+	"hasBeenSaved": false,
+	"usageProfileName": null,
+	"script": "import sys\r\nimport json\r\nimport boto3\r\nfrom collections import defaultdict\r\n\r\nfrom awsglue.utils import getResolvedOptions\r\nfrom pyspark.context import SparkContext\r\nfrom awsglue.context import GlueContext\r\nfrom awsglue.job import Job\r\n\r\nargs = getResolvedOptions(sys.argv, ['JOB_NAME'])\r\n\r\nsc = SparkContext()\r\nglueContext = GlueContext(sc)\r\nspark = glueContext.spark_session\r\n\r\njob = Job(glueContext)\r\njob.init(args['JOB_NAME'], args)\r\n\r\nbucket = \"propelnoi-vijay-datalake\"\r\ninput_path = f\"s3://{bucket}/outputs/output_noi_model_features/\"\r\ninference_key = \"modeling/noi_deepar/inference_input/inference.json\"\r\n\r\nprediction_length = 12\r\n\r\ndf = spark.read.parquet(input_path).select(\r\n    \"property_id\",\r\n    \"month\",\r\n    \"noi\",\r\n    \"inflation_rate\"\r\n).orderBy(\"property_id\", \"month\")\r\n\r\nproperty_ids = [\r\n    r[0] for r in df.select(\"property_id\").distinct().orderBy(\"property_id\").collect()\r\n]\r\nproperty_to_cat = {pid: idx for idx, pid in enumerate(property_ids)}\r\n\r\nrows = df.collect()\r\n\r\nseries = defaultdict(list)\r\ninfl_series = defaultdict(list)\r\n\r\nfor r in rows:\r\n    pid = r[\"property_id\"]\r\n    month = r[\"month\"]\r\n    noi_val = float(r[\"noi\"])\r\n    infl_val = float(r[\"inflation_rate\"]) if r[\"inflation_rate\"] is not None else 0.0\r\n\r\n    series[pid].append((month, noi_val))\r\n    infl_series[pid].append((month, infl_val))\r\n\r\nrecords = []\r\n\r\nfor pid, values in series.items():\r\n    values = sorted(values, key=lambda x: x[0])\r\n    infl_vals = sorted(infl_series[pid], key=lambda x: x[0])\r\n\r\n    months = [v[0] for v in values]\r\n    target = [v[1] for v in values]\r\n    hist_infl = [v[1] for v in infl_vals]\r\n\r\n    start = f\"{months[0]} 00:00:00\"\r\n    cat = [property_to_cat[pid]]\r\n\r\n    # Extend future dynamic feature values for 12 forecast periods\r\n    last_infl = hist_infl[-1] if len(hist_infl) > 0 else 0.0\r\n    future_infl = [last_infl] * prediction_length\r\n    full_dynamic_feat = [hist_infl + future_infl]\r\n\r\n    record = {\r\n        \"start\": start,\r\n        \"target\": target,\r\n        \"cat\": cat,\r\n        \"dynamic_feat\": full_dynamic_feat\r\n    }\r\n\r\n    records.append(record)\r\n\r\nlocal_file = \"/tmp/inference.json\"\r\n\r\nwith open(local_file, \"w\") as f:\r\n    for r in records:\r\n        f.write(json.dumps(r) + \"\\n\")\r\n\r\ns3 = boto3.client(\"s3\")\r\ns3.upload_file(local_file, bucket, inference_key)\r\n\r\nprint(f\"Uploaded inference data to s3://{bucket}/{inference_key}\")\r\n\r\njob.commit()"
+}

@@ -1,0 +1,48 @@
+{
+	"jobConfig": {
+		"name": "job-export-noi-deepar-training",
+		"description": "",
+		"role": "arn:aws:iam::798306367304:role/PropelNOI-Glue-Role",
+		"command": "glueetl",
+		"version": "5.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 2,
+		"maxCapacity": 2,
+		"jobRunQueuingEnabled": false,
+		"maxRetries": 0,
+		"timeout": 480,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "job-export-noi-deepar-training.py",
+		"scriptLocation": "s3://aws-glue-assets-798306367304-ap-south-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [
+			{
+				"key": "--conf",
+				"value": "spark.eventLog.rolling.enabled=true",
+				"existing": false
+			}
+		],
+		"tags": [],
+		"jobMode": "DEVELOPER_MODE",
+		"createdOn": "2026-03-08T00:49:02.438Z",
+		"developerMode": true,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-798306367304-ap-south-1/temporary/",
+		"glueHiveMetastore": true,
+		"etlAutoTuning": true,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"bookmark": "job-bookmark-disable",
+		"sparkPath": "s3://aws-glue-assets-798306367304-ap-south-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"maintenanceWindow": null
+	},
+	"hasBeenSaved": false,
+	"usageProfileName": null,
+	"script": "import sys\r\nimport json\r\nimport boto3\r\nfrom collections import defaultdict\r\n\r\nfrom awsglue.utils import getResolvedOptions\r\nfrom pyspark.context import SparkContext\r\nfrom awsglue.context import GlueContext\r\nfrom awsglue.job import Job\r\n\r\nargs = getResolvedOptions(sys.argv, ['JOB_NAME'])\r\n\r\nsc = SparkContext()\r\nglueContext = GlueContext(sc)\r\nspark = glueContext.spark_session\r\n\r\njob = Job(glueContext)\r\njob.init(args['JOB_NAME'], args)\r\n\r\nbucket = \"propelnoi-vijay-datalake\"\r\n\r\ninput_path = f\"s3://{bucket}/outputs/output_noi_model_features/\"\r\ntrain_key = \"modeling/noi_deepar/train/train.json\"\r\ntest_key = \"modeling/noi_deepar/test/test.json\"\r\n\r\n# -----------------------------\r\n# Read input features\r\n# -----------------------------\r\ndf = spark.read.parquet(input_path).select(\r\n    \"property_id\",\r\n    \"month\",\r\n    \"noi\",\r\n    \"inflation_rate\"\r\n)\r\n\r\ndf = df.orderBy(\"property_id\", \"month\")\r\n\r\n# -----------------------------\r\n# Map property_id → category\r\n# -----------------------------\r\nproperty_map = (\r\n    df.select(\"property_id\")\r\n      .distinct()\r\n      .orderBy(\"property_id\")\r\n      .rdd.map(lambda r: r[0])\r\n      .collect()\r\n)\r\n\r\nproperty_to_cat = {pid: idx for idx, pid in enumerate(property_map)}\r\n\r\nrows = df.collect()\r\n\r\nseries = defaultdict(list)\r\ninfl_series = defaultdict(list)\r\n\r\n# -----------------------------\r\n# Build time series\r\n# -----------------------------\r\nfor r in rows:\r\n    pid = r[\"property_id\"]\r\n    month = r[\"month\"]\r\n    noi_val = float(r[\"noi\"])\r\n    infl = float(r[\"inflation_rate\"]) if r[\"inflation_rate\"] else 0.0\r\n\r\n    series[pid].append((month, noi_val))\r\n    infl_series[pid].append((month, infl))\r\n\r\ntrain_records = []\r\ntest_records = []\r\n\r\nprediction_length = 12\r\n\r\n# -----------------------------\r\n# Create DeepAR records\r\n# -----------------------------\r\nfor pid, values in series.items():\r\n\r\n    values = sorted(values, key=lambda x: x[0])\r\n    infl_vals = sorted(infl_series[pid], key=lambda x: x[0])\r\n\r\n    months = [v[0] for v in values]\r\n    target = [v[1] for v in values]\r\n    infl_target = [v[1] for v in infl_vals]\r\n\r\n    if len(target) < 18:\r\n        continue\r\n\r\n    start = f\"{months[0]} 00:00:00\"\r\n    cat = [property_to_cat[pid]]\r\n\r\n    train_target = target[:-prediction_length]\r\n    train_dynamic = [infl_target[:-prediction_length]]\r\n\r\n    test_target = target\r\n    test_dynamic = [infl_target]\r\n\r\n    train_records.append({\r\n        \"start\": start,\r\n        \"target\": train_target,\r\n        \"cat\": cat,\r\n        \"dynamic_feat\": train_dynamic\r\n    })\r\n\r\n    test_records.append({\r\n        \"start\": start,\r\n        \"target\": test_target,\r\n        \"cat\": cat,\r\n        \"dynamic_feat\": test_dynamic\r\n    })\r\n\r\nprint(\"Train series:\", len(train_records))\r\nprint(\"Test series:\", len(test_records))\r\n\r\n# -----------------------------\r\n# Write local files\r\n# -----------------------------\r\ntrain_file = \"/tmp/train.json\"\r\ntest_file = \"/tmp/test.json\"\r\n\r\nwith open(train_file, \"w\") as f:\r\n    for r in train_records:\r\n        f.write(json.dumps(r) + \"\\n\")\r\n\r\nwith open(test_file, \"w\") as f:\r\n    for r in test_records:\r\n        f.write(json.dumps(r) + \"\\n\")\r\n\r\n# -----------------------------\r\n# Upload to S3\r\n# -----------------------------\r\ns3 = boto3.client(\"s3\")\r\n\r\ns3.upload_file(train_file, bucket, train_key)\r\ns3.upload_file(test_file, bucket, test_key)\r\n\r\nprint(\"Uploaded training data to:\")\r\nprint(f\"s3://{bucket}/{train_key}\")\r\nprint(f\"s3://{bucket}/{test_key}\")\r\n\r\njob.commit()"
+}

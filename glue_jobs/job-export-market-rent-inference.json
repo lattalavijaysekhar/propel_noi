@@ -1,0 +1,48 @@
+{
+	"jobConfig": {
+		"name": "job-export-market-rent-inference",
+		"description": "",
+		"role": "arn:aws:iam::798306367304:role/PropelNOI-Glue-Role",
+		"command": "glueetl",
+		"version": "5.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 2,
+		"maxCapacity": 2,
+		"jobRunQueuingEnabled": false,
+		"maxRetries": 0,
+		"timeout": 480,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "job-export-market-rent-inference.py",
+		"scriptLocation": "s3://aws-glue-assets-798306367304-ap-south-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [
+			{
+				"key": "--conf",
+				"value": "spark.eventLog.rolling.enabled=true",
+				"existing": false
+			}
+		],
+		"tags": [],
+		"jobMode": "DEVELOPER_MODE",
+		"createdOn": "2026-03-08T06:41:07.424Z",
+		"developerMode": true,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-798306367304-ap-south-1/temporary/",
+		"glueHiveMetastore": true,
+		"etlAutoTuning": true,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"bookmark": "job-bookmark-disable",
+		"sparkPath": "s3://aws-glue-assets-798306367304-ap-south-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"maintenanceWindow": null
+	},
+	"hasBeenSaved": false,
+	"usageProfileName": null,
+	"script": "import sys\r\nfrom awsglue.utils import getResolvedOptions\r\nfrom pyspark.context import SparkContext\r\nfrom awsglue.context import GlueContext\r\nfrom awsglue.job import Job\r\nfrom pyspark.sql import functions as F\r\nfrom pyspark.ml.feature import StringIndexer\r\n\r\nargs = getResolvedOptions(sys.argv, [\"JOB_NAME\"])\r\n\r\nsc = SparkContext()\r\nglueContext = GlueContext(sc)\r\nspark = glueContext.spark_session\r\njob = Job(glueContext)\r\njob.init(args[\"JOB_NAME\"], args)\r\n\r\n# --------------------------------------------------\r\n# Configuration\r\n# --------------------------------------------------\r\nBUCKET = \"propelnoi-vijay-datalake\"\r\n\r\nTRAINING_INPUT_PATH = f\"s3://{BUCKET}/outputs/output_market_rent_training/\"\r\nSCORING_INPUT_PATH = f\"s3://{BUCKET}/outputs/output_market_rent_scoring_input/\"\r\nINFERENCE_OUTPUT_PATH = f\"s3://{BUCKET}/modeling/market_rent/inference_input/\"\r\n\r\n# --------------------------------------------------\r\n# Read source data\r\n# --------------------------------------------------\r\nprint(\"Reading training and scoring datasets as PARQUET...\")\r\ntrain_raw = spark.read.parquet(TRAINING_INPUT_PATH)\r\nscore_raw = spark.read.parquet(SCORING_INPUT_PATH)\r\n\r\nprint(\"Training schema:\")\r\ntrain_raw.printSchema()\r\n\r\nprint(\"Scoring schema:\")\r\nscore_raw.printSchema()\r\n\r\n# --------------------------------------------------\r\n# Basic cleanup\r\n# --------------------------------------------------\r\ntrain_raw = (\r\n    train_raw\r\n    .withColumn(\"city\", F.trim(F.col(\"city\")))\r\n    .withColumn(\"room_type\", F.trim(F.col(\"room_type\")))\r\n)\r\n\r\nscore_raw = (\r\n    score_raw\r\n    .withColumn(\"city\", F.trim(F.col(\"city\")))\r\n    .withColumn(\"room_type\", F.trim(F.col(\"room_type\")))\r\n)\r\n\r\nrequired_train_cols = [\"city\", \"room_type\"]\r\nrequired_score_cols = [\r\n    \"property_id\",\r\n    \"month\",\r\n    \"city\",\r\n    \"property_type\",\r\n    \"units\",\r\n    \"current_portfolio_rent\",\r\n    \"room_type\",\r\n    \"minimum_nights\",\r\n    \"availability_365\",\r\n    \"number_of_reviews\",\r\n    \"review_scores_rating\",\r\n    \"latitude\",\r\n    \"longitude\"\r\n]\r\n\r\nmissing_train = [c for c in required_train_cols if c not in train_raw.columns]\r\nmissing_score = [c for c in required_score_cols if c not in score_raw.columns]\r\n\r\nif missing_train:\r\n    raise Exception(f\"Missing training columns: {missing_train}\")\r\n\r\nif missing_score:\r\n    raise Exception(f\"Missing scoring columns: {missing_score}\")\r\n\r\n# --------------------------------------------------\r\n# Fit same indexers on training data\r\n# --------------------------------------------------\r\nprint(\"Fitting StringIndexer models on training data...\")\r\n\r\ncity_indexer = StringIndexer(\r\n    inputCol=\"city\",\r\n    outputCol=\"city_idx\",\r\n    handleInvalid=\"keep\"\r\n)\r\n\r\nroom_type_indexer = StringIndexer(\r\n    inputCol=\"room_type\",\r\n    outputCol=\"room_type_idx\",\r\n    handleInvalid=\"keep\"\r\n)\r\n\r\ncity_model = city_indexer.fit(train_raw)\r\nroom_type_model = room_type_indexer.fit(train_raw)\r\n\r\n# --------------------------------------------------\r\n# Transform scoring data\r\n# --------------------------------------------------\r\nprint(\"Applying city indexer...\")\r\nscore_city = city_model.transform(score_raw)\r\nprint(\"Columns after city transform:\", score_city.columns)\r\n\r\nprint(\"Applying room_type indexer...\")\r\nscore_indexed = room_type_model.transform(score_city)\r\nprint(\"Columns after room_type transform:\", score_indexed.columns)\r\n\r\nif \"city_idx\" not in score_indexed.columns:\r\n    raise Exception(\"city_idx was not created after transform\")\r\n\r\nif \"room_type_idx\" not in score_indexed.columns:\r\n    raise Exception(\"room_type_idx was not created after transform\")\r\n\r\n# --------------------------------------------------\r\n# Final inference dataset\r\n# Includes metadata + features for notebook scoring\r\n# --------------------------------------------------\r\nfinal_df = score_indexed.select(\r\n    F.col(\"property_id\"),\r\n    F.col(\"month\"),\r\n    F.col(\"city\"),\r\n    F.col(\"property_type\"),\r\n    F.col(\"units\").cast(\"double\").alias(\"units\"),\r\n    F.col(\"current_portfolio_rent\").cast(\"double\").alias(\"current_portfolio_rent\"),\r\n    F.lit(3.0).cast(\"double\").alias(\"inflation_rate\"),\r\n    F.col(\"city_idx\").cast(\"double\").alias(\"city_idx\"),\r\n    F.col(\"room_type_idx\").cast(\"double\").alias(\"room_type_idx\"),\r\n    F.coalesce(F.col(\"minimum_nights\"), F.lit(0.0)).cast(\"double\").alias(\"minimum_nights\"),\r\n    F.coalesce(F.col(\"availability_365\"), F.lit(0.0)).cast(\"double\").alias(\"availability_365\"),\r\n    F.coalesce(F.col(\"number_of_reviews\"), F.lit(0.0)).cast(\"double\").alias(\"number_of_reviews\"),\r\n    F.coalesce(F.col(\"review_scores_rating\"), F.lit(0.0)).cast(\"double\").alias(\"review_scores_rating\"),\r\n    F.coalesce(F.col(\"latitude\"), F.lit(0.0)).cast(\"double\").alias(\"latitude\"),\r\n    F.coalesce(F.col(\"longitude\"), F.lit(0.0)).cast(\"double\").alias(\"longitude\")\r\n)\r\n\r\nprint(\"Final inference schema:\")\r\nfinal_df.printSchema()\r\n\r\nfinal_df.show(5, truncate=False)\r\nprint(\"Inference row count:\", final_df.count())\r\n\r\n# --------------------------------------------------\r\n# Write inference CSV for notebook scoring\r\n# WITH header\r\n# --------------------------------------------------\r\nprint(\"Writing inference input CSV...\")\r\nfinal_df.coalesce(1).write.mode(\"overwrite\").option(\"header\", \"true\").csv(INFERENCE_OUTPUT_PATH)\r\n\r\nprint(\"Glue inference export completed successfully.\")\r\njob.commit()"
+}
