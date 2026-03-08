@@ -200,5 +200,5 @@ https://www.loom.com/share/08a4e1eb784d4852b773b31e92ebc9dd
 ---
 
 ## Author
-Created by [@lattalavijaysekhar] - feel free to contact me!
+Vijay Sekhar Lattala
 AWS AI Hackathon Submission
