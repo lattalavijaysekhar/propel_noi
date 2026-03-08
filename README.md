@@ -169,13 +169,13 @@ Features include:
 
 # Demo Video
 
-PropelNOI: AI-Driven Margin Optimization for Real Estate:
+PropelNOI: AI-Driven Margin Optimization for Real Estate Explanation:
 https://www.loom.com/share/21ef883d9f444b998e52d17bce0e803b
-<img width="1018" height="126" alt="image" src="https://github.com/user-attachments/assets/8b6a8908-93ce-44d4-81d0-997910244022" />
+
 
 PropelNOI: AI-Driven Margin Optimization for Real Estate Demonstration:
 https://www.loom.com/share/08a4e1eb784d4852b773b31e92ebc9dd
-<img width="1119" height="126" alt="image" src="https://github.com/user-attachments/assets/1f099166-a154-4b3d-a7d6-4a8366d2a5d4" />
+
 
 
 
