@@ -4,6 +4,12 @@ import streamlit as st
 
 API_URL = "https://viprksu7y3.execute-api.ap-south-1.amazonaws.com/copilot"
 
+st.set_page_config(
+    page_title="PropelNOI AI Copilot",
+    page_icon="🏢",
+    layout="wide",
+)
+
 st.markdown(
     """
 <style>
@@ -12,35 +18,14 @@ st.markdown(
     padding-bottom: 2rem;
 }
 
-/* Base font */
 html, body, [class*="css"] {
     font-size: 12px;
 }
 
-/* Fix main page title */
-h1 {
-    font-size: 32px !important;
-    font-weight: 700 !important;
-    color: #1f2937 !important;
-}
-
-/* Subheaders */
 .dashboard-subheader {
-    font-size: 14px !important;
+    font-size: 14px;
     font-weight: 600;
-    color: #1f2937 !important;
     margin-bottom: 0.35rem;
-}
-
-/* Keep markdown text consistent */
-[data-testid="stMarkdownContainer"] p,
-[data-testid="stMarkdownContainer"] li,
-[data-testid="stMarkdownContainer"] span,
-[data-testid="stMarkdownContainer"] strong,
-[data-testid="stMarkdownContainer"] em {
-    font-size: 12px !important;
-    color: #1f2937 !important;
-    line-height: 1.6 !important;
 }
 
 .small-note {
