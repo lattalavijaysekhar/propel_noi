@@ -22,12 +22,41 @@ html, body, [class*="css"] {
     font-size: 12px;
 }
 
+/* Keep main title and headers normal */
+h1 {
+    font-size: 2.5rem !important;
+    font-weight: 700 !important;
+    color: #1f2937 !important;
+}
+h2 {
+    font-size: 1.5rem !important;
+    font-weight: 600 !important;
+    color: #1f2937 !important;
+}
+h3 {
+    font-size: 1.25rem !important;
+    font-weight: 600 !important;
+    color: #1f2937 !important;
+}
+
+/* Dashboard subheader stays 14 */
 .dashboard-subheader {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: #1f2937 !important;
     margin-bottom: 0.35rem;
 }
 
+/* Only normalize normal markdown text, not headings */
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stMarkdownContainer"] li *:not(h1):not(h2):not(h3) {
+    font-size: 12px !important;
+    color: #1f2937 !important;
+    line-height: 1.6 !important;
+}
+
+/* Try-question cards */
 .small-note {
     font-size: 12px;
     color: #6b7280;
@@ -45,25 +74,6 @@ html, body, [class*="css"] {
     font-size: 14px;
     font-weight: 600;
     margin-bottom: 0.35rem;
-}
-
-/* Keep headings untouched */
-h1, h2, h3 {
-    font-size: revert !important;
-}
-
-/* Only normalize bullet / paragraph text */
-[data-testid="stMarkdownContainer"] p,
-[data-testid="stMarkdownContainer"] li {
-    font-size: 12px !important;
-    color: #1f2937 !important;
-}
-
-/* Normalize number spans without affecting titles */
-[data-testid="stMarkdownContainer"] li span,
-[data-testid="stMarkdownContainer"] li strong {
-    font-size: 12px !important;
-    color: #1f2937 !important;
 }
 </style>
 """,
