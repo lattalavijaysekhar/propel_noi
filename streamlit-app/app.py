@@ -1,6 +1,7 @@
 import pandas as pd
 import requests
 import streamlit as st
+import matplotlib.pyplot as plt
 
 API_URL = "https://viprksu7y3.execute-api.ap-south-1.amazonaws.com/copilot"
 
@@ -18,25 +19,25 @@ st.markdown(
     padding-bottom: 2rem;
 }
 
-/* General font sizing */
+/* Global base font */
 html, body, [class*="css"] {
     font-size: 12px;
 }
 
-/* Dashboard subheaders */
+/* Dashboard title/subheader */
 .dashboard-subheader {
     font-size: 14px;
     font-weight: 600;
     margin-bottom: 0.35rem;
 }
 
-/* Small helper text */
+/* General helper text */
 .small-note {
     font-size: 12px;
     color: #6b7280;
 }
 
-/* Try-question cards */
+/* Try question cards */
 .try-card {
     padding: 0.9rem;
     border-radius: 14px;
@@ -70,13 +71,18 @@ html, body, [class*="css"] {
     color: #1f2937;
 }
 
-/* Query context block */
+/* Query context */
 .query-context {
     padding: 0.8rem 1rem;
     border-radius: 14px;
     background: #fbfcfe;
     border: 1px solid #e6ebf2;
     font-size: 12px;
+}
+
+/* Reduce white space around pyplot charts */
+[data-testid="stVerticalBlock"] .element-container:has(canvas) {
+    margin-bottom: 0.25rem;
 }
 </style>
 """,
@@ -88,12 +94,12 @@ if "history" not in st.session_state:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def query_api(question: str):
+def query_api(question: str, include_details: bool = False):
     response = requests.post(
         API_URL,
         json={
             "question": question,
-            "include_details": False,
+            "include_details": include_details,
         },
         timeout=120,
     )
@@ -101,39 +107,28 @@ def query_api(question: str):
     return response.json()
 
 
-# Updated dashboard list
 DASHBOARD_CONFIGS = {
     "NOI Forecast Trend": {
-        "question": "Show the latest forecast month top 15 properties with property_id and predicted_noi ordered by predicted_noi descending",
-        "chart": "line_single_metric",
-        "x": "property_id",
-        "y": "predicted_noi",
-        "help": "Shows the latest forecast month top 15 properties by predicted NOI.",
+        "question": "Show top 15 highest NOI properties",
+        "chart": "noi_line",
+        "help": "Shows the latest forecast month 15 properties by predicted NOI.",
     },
     "Portfolio NOI KPI": {
         "question": "What is the total predicted portfolio NOI?",
         "chart": "metric",
-        "value": "total_predicted_noi",
-        "help": "Total expected NOI across the portfolio.",
+        "help": "Shows the overall predicted NOI across the forecast portfolio.",
     },
     "Market Rent Gap Analysis": {
-        "question": "Show the latest month top 15 properties with property_id, current_portfolio_rent, predicted_market_rent, and rent_gap ordered by absolute rent_gap descending",
+        "question": "Show latest month top 15 properties by rent gap",
         "chart": "market_rent_combo",
-        "x": "property_id",
-        "bar1": "current_portfolio_rent",
-        "bar2": "predicted_market_rent",
-        "line": "rent_gap",
-        "help": "Shows latest month top 15 properties comparing current rent vs predicted market rent, with rent gap overlay.",
+        "help": "Shows the latest month 15 properties with current portfolio rent, predicted market rent, and rent gap.",
     },
     "Rent Gap Impact": {
-        "question": "Show latest month top 15 properties with property_id and rent_gap ordered by absolute rent_gap descending",
-        "chart": "bar",
-        "x": "property_id",
-        "y": "rent_gap",
-        "help": "Highlights the latest month top 15 rent gap opportunities.",
+        "question": "Which properties are under-rented in Boston?",
+        "chart": "rent_gap_bar",
+        "help": "Highlights rent gap opportunities from the returned result set.",
     },
 }
-
 
 TRY_QUESTIONS = {
     "NOI Forecasting": [
@@ -170,6 +165,13 @@ def pretty_label(value: str) -> str:
     if not value:
         return "N/A"
     return value.replace("_", " ").title()
+
+
+def to_numeric_df(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    for col in out.columns:
+        out[col] = pd.to_numeric(out[col], errors="ignore")
+    return out
 
 
 def render_try_questions():
@@ -262,6 +264,152 @@ def render_response_meta(item: dict):
     )
 
 
+def render_metric_dashboard(payload: dict):
+    data = payload.get("data", [])
+    df = pd.DataFrame(data)
+
+    if df.empty:
+        total_from_answer = payload.get("total_count", 0)
+        st.metric("Portfolio NOI KPI", f"{total_from_answer:,}" if total_from_answer else "N/A")
+        return
+
+    df = to_numeric_df(df)
+
+    value = None
+    if "total_predicted_noi" in df.columns:
+        series = pd.to_numeric(df["total_predicted_noi"], errors="coerce").dropna()
+        if not series.empty:
+            value = series.iloc[0]
+
+    if value is None:
+        st.warning("No KPI value returned for this dashboard.")
+    else:
+        st.metric("Portfolio NOI KPI", f"${value:,.0f}")
+
+
+def render_noi_forecast_trend(payload: dict):
+    df = pd.DataFrame(payload.get("data", []))
+    if df.empty:
+        st.warning("No data returned for this dashboard.")
+        return
+
+    df = to_numeric_df(df)
+
+    required = {"property_id", "predicted_noi"}
+    if not required.issubset(df.columns):
+        st.warning("Expected columns not found for NOI Forecast Trend dashboard.")
+        return
+
+    chart_df = df[["property_id", "predicted_noi"]].copy()
+    chart_df["predicted_noi"] = pd.to_numeric(chart_df["predicted_noi"], errors="coerce")
+    chart_df = chart_df.dropna(subset=["predicted_noi"])
+    chart_df = chart_df.head(15)
+
+    if chart_df.empty:
+        st.warning("No valid predicted NOI values returned.")
+        return
+
+    fig, ax = plt.subplots(figsize=(12, 4.8))
+    ax.plot(chart_df["property_id"], chart_df["predicted_noi"], marker="o")
+    ax.set_xlabel("Property ID")
+    ax.set_ylabel("Predicted NOI")
+    ax.set_title("Latest Forecast Month - Top 15 Properties by Predicted NOI", fontsize=14)
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    st.pyplot(fig)
+
+
+def render_market_rent_gap_analysis(payload: dict):
+    df = pd.DataFrame(payload.get("data", []))
+    if df.empty:
+        st.warning("No data returned for this dashboard.")
+        return
+
+    df = to_numeric_df(df)
+
+    required = {"property_id", "current_portfolio_rent", "predicted_market_rent", "rent_gap"}
+    if not required.issubset(df.columns):
+        st.warning("Expected columns not found for Market Rent Gap Analysis dashboard.")
+        return
+
+    chart_df = df[["property_id", "current_portfolio_rent", "predicted_market_rent", "rent_gap"]].copy()
+    chart_df["current_portfolio_rent"] = pd.to_numeric(chart_df["current_portfolio_rent"], errors="coerce")
+    chart_df["predicted_market_rent"] = pd.to_numeric(chart_df["predicted_market_rent"], errors="coerce")
+    chart_df["rent_gap"] = pd.to_numeric(chart_df["rent_gap"], errors="coerce")
+    chart_df = chart_df.dropna()
+    chart_df = chart_df.head(15)
+
+    if chart_df.empty:
+        st.warning("No valid rent comparison values returned.")
+        return
+
+    fig, ax1 = plt.subplots(figsize=(13, 5.2))
+
+    x = range(len(chart_df))
+    width = 0.38
+
+    ax1.bar(
+        [i - width / 2 for i in x],
+        chart_df["current_portfolio_rent"],
+        width=width,
+        label="Current Portfolio Rent",
+    )
+    ax1.bar(
+        [i + width / 2 for i in x],
+        chart_df["predicted_market_rent"],
+        width=width,
+        label="Predicted Market Rent",
+    )
+    ax1.set_ylabel("Rent")
+    ax1.set_xlabel("Property ID")
+    ax1.set_xticks(list(x))
+    ax1.set_xticklabels(chart_df["property_id"], rotation=45, ha="right")
+
+    ax2 = ax1.twinx()
+    ax2.plot(x, chart_df["rent_gap"], marker="o", label="Rent Gap")
+    ax2.set_ylabel("Rent Gap")
+
+    handles1, labels1 = ax1.get_legend_handles_labels()
+    handles2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(handles1 + handles2, labels1 + labels2, loc="upper left")
+
+    ax1.set_title("Latest Month - Top 15 Properties Rent Comparison", fontsize=14)
+    plt.tight_layout()
+    st.pyplot(fig)
+
+
+def render_rent_gap_impact(payload: dict):
+    df = pd.DataFrame(payload.get("data", []))
+    if df.empty:
+        st.warning("No data returned for this dashboard.")
+        return
+
+    df = to_numeric_df(df)
+
+    required = {"property_id", "rent_gap"}
+    if not required.issubset(df.columns):
+        st.warning("Expected columns not found for Rent Gap Impact dashboard.")
+        return
+
+    chart_df = df[["property_id", "rent_gap"]].copy()
+    chart_df["rent_gap"] = pd.to_numeric(chart_df["rent_gap"], errors="coerce")
+    chart_df = chart_df.dropna()
+    chart_df = chart_df.head(15)
+
+    if chart_df.empty:
+        st.warning("No valid rent gap values returned.")
+        return
+
+    fig, ax = plt.subplots(figsize=(12, 4.8))
+    ax.bar(chart_df["property_id"], chart_df["rent_gap"])
+    ax.set_xlabel("Property ID")
+    ax.set_ylabel("Rent Gap")
+    ax.set_title("Rent Gap Impact", fontsize=14)
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    st.pyplot(fig)
+
+
 if page == "Copilot":
     st.title("🏢 PropelNOI AI Copilot")
     st.caption("Ask natural-language questions about rent optimization, NOI forecasts, and portfolio insights.")
@@ -279,7 +427,7 @@ if page == "Copilot":
 
         try:
             with st.spinner("Analyzing portfolio data..."):
-                payload = query_api(question)
+                payload = query_api(question, include_details=False)
 
             st.session_state.history.append(
                 {
@@ -336,68 +484,34 @@ else:
     dashboard_name = st.selectbox("Choose a dashboard", list(DASHBOARD_CONFIGS.keys()))
     config = DASHBOARD_CONFIGS[dashboard_name]
 
-    st.markdown(f'<div class="dashboard-subheader">{dashboard_name}</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="dashboard-subheader">{dashboard_name}</div>',
+        unsafe_allow_html=True,
+    )
     st.write(config["help"])
 
     try:
         with st.spinner("Loading dashboard..."):
-            payload = query_api(config["question"])
+            payload = query_api(config["question"], include_details=True)
 
         if payload.get("answer"):
             st.markdown("#### Business Insight")
             st.markdown(payload["answer"])
 
-        df = pd.DataFrame(payload.get("data", []))
+        if dashboard_name == "NOI Forecast Trend":
+            render_noi_forecast_trend(payload)
 
-        # Fallback: if API does not return data because include_details=False,
-        # still try to use fields if present in payload
-        if df.empty and "data" in payload and payload["data"]:
-            df = pd.DataFrame(payload["data"])
+        elif dashboard_name == "Portfolio NOI KPI":
+            render_metric_dashboard(payload)
 
-        if df.empty:
-            st.warning("No data returned for this dashboard.")
+        elif dashboard_name == "Market Rent Gap Analysis":
+            render_market_rent_gap_analysis(payload)
+
+        elif dashboard_name == "Rent Gap Impact":
+            render_rent_gap_impact(payload)
+
         else:
-            for col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors="ignore")
-
-            chart_type = config["chart"]
-
-            if chart_type == "metric":
-                value_col = config["value"]
-                metric_value = None
-                if value_col in df.columns:
-                    metric_value = pd.to_numeric(df[value_col], errors="coerce").dropna().sum()
-                elif len(df.columns) == 1:
-                    metric_value = pd.to_numeric(df.iloc[:, 0], errors="coerce").dropna().sum()
-
-                st.metric(dashboard_name, f"${metric_value:,.0f}" if metric_value is not None else "N/A")
-
-            elif chart_type == "line_single_metric":
-                x_col = config["x"]
-                y_col = config["y"]
-                chart_df = df[[x_col, y_col]].copy().set_index(x_col)
-                chart_df[y_col] = pd.to_numeric(chart_df[y_col], errors="coerce")
-                st.line_chart(chart_df)
-
-            elif chart_type == "bar":
-                x_col = config["x"]
-                y_col = config["y"]
-                chart_df = df[[x_col, y_col]].copy().set_index(x_col)
-                chart_df[y_col] = pd.to_numeric(chart_df[y_col], errors="coerce")
-                st.bar_chart(chart_df)
-
-            elif chart_type == "market_rent_combo":
-                st.markdown("#### Current Portfolio Rent vs Predicted Market Rent")
-                chart_df = df[[config["x"], config["bar1"], config["bar2"]]].copy().set_index(config["x"])
-                chart_df[config["bar1"]] = pd.to_numeric(chart_df[config["bar1"]], errors="coerce")
-                chart_df[config["bar2"]] = pd.to_numeric(chart_df[config["bar2"]], errors="coerce")
-                st.bar_chart(chart_df)
-
-                if config["line"] in df.columns:
-                    st.markdown("#### Rent Gap Trend")
-                    line_df = df[[config["x"], config["line"]]].copy().set_index(config["x"])
-                    line_df[config["line"]] = pd.to_numeric(line_df[config["line"]], errors="coerce")
-                    st.line_chart(line_df)
+            st.warning("Unsupported dashboard configuration.")
 
     except Exception as exc:
         st.error(f"Unable to load dashboard: {exc}")
