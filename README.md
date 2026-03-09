@@ -161,20 +161,38 @@ Features include:
 
 ---
 
+# AI Copilot - Prebuilt Analytics Dashboards
+## NOI Forecast Trend
+ - Shows predicted property income using ML forecasting
+ - Helps evaluate future portfolio performance
+## Portfolio NOI KPI
+ - Shows the total expected NOI across the portfolio.
+## Market Rent Gap Analysis
+ - Identifies properties priced below or above market rent
+ - Highlights revenue optimization opportunities
+## Rent Gap Impact
+ - Highlights the top rent-gap opportunities.
+<img width="749" height="615" alt="image" src="https://github.com/user-attachments/assets/e8eb1b72-59fa-4caa-b33f-1f8aeb0bbdca" />
+
+
 # Working Prototype
 
-[Insert Streamlit URL here](http://13.201.122.89:8501/)
+https://lattalavijaysekhar-propel-noi-streamlit-appapp-ry76gn.streamlit.app/
+<img width="1075" height="62" alt="image" src="https://github.com/user-attachments/assets/b57a3ffa-5872-4ba8-8423-aaf8c1893676" />
+
 
 ---
 
 # Demo Video
 
 PropelNOI: AI-Driven Margin Optimization for Real Estate Explanation:
-https://www.loom.com/share/21ef883d9f444b998e52d17bce0e803b
-
+[https://www.loom.com/share/21ef883d9f444b998e52d17bce0e803b](https://drive.google.com/file/d/1A2TAKlKfOxULYOy8BIt8JRkbifmkT3LT/view?usp=drive_link
+)
 
 PropelNOI: AI-Driven Margin Optimization for Real Estate Demonstration:
-https://www.loom.com/share/08a4e1eb784d4852b773b31e92ebc9dd
+https://drive.google.com/file/d/1RaaonBRSQijesv4KKWXSii2B3USyC6Pu/view?usp=drive_link
+<img width="1328" height="62" alt="image" src="https://github.com/user-attachments/assets/9805e90b-a86d-4815-ab3b-46d25186b638" />
+
 
 ---
 
