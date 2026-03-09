@@ -46,6 +46,14 @@ html, body, [class*="css"] {
     font-weight: 600;
     margin-bottom: 0.35rem;
 }
+
+/* Force consistent font color and size for numbers */
+[data-testid="stMarkdownContainer"] code,
+[data-testid="stMarkdownContainer"] span,
+[data-testid="stMarkdownContainer"] strong {
+    font-size: 12px !important;
+    color: #1f2937 !important;
+}
 </style>
 """,
     unsafe_allow_html=True,
