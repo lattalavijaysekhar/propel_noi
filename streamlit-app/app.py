@@ -1,7 +1,6 @@
 import pandas as pd
 import requests
 import streamlit as st
-import matplotlib.pyplot as plt
 
 API_URL = "https://viprksu7y3.execute-api.ap-south-1.amazonaws.com/copilot"
 
@@ -19,25 +18,21 @@ st.markdown(
     padding-bottom: 2rem;
 }
 
-/* Global base font */
 html, body, [class*="css"] {
     font-size: 12px;
 }
 
-/* Dashboard title/subheader */
 .dashboard-subheader {
     font-size: 14px;
     font-weight: 600;
     margin-bottom: 0.35rem;
 }
 
-/* General helper text */
 .small-note {
     font-size: 12px;
     color: #6b7280;
 }
 
-/* Try question cards */
 .try-card {
     padding: 0.9rem;
     border-radius: 14px;
@@ -50,39 +45,6 @@ html, body, [class*="css"] {
     font-size: 14px;
     font-weight: 600;
     margin-bottom: 0.35rem;
-}
-
-/* Snapshot cards */
-.snapshot-box {
-    padding: 0.8rem 1rem;
-    border-radius: 14px;
-    background: #f7f9fc;
-    border: 1px solid #e6ebf2;
-    min-height: 90px;
-}
-.snapshot-label {
-    font-size: 12px;
-    color: #6b7280;
-    margin-bottom: 0.25rem;
-}
-.snapshot-value {
-    font-size: 26px;
-    font-weight: 600;
-    color: #1f2937;
-}
-
-/* Query context */
-.query-context {
-    padding: 0.8rem 1rem;
-    border-radius: 14px;
-    background: #fbfcfe;
-    border: 1px solid #e6ebf2;
-    font-size: 12px;
-}
-
-/* Reduce white space around pyplot charts */
-[data-testid="stVerticalBlock"] .element-container:has(canvas) {
-    margin-bottom: 0.25rem;
 }
 </style>
 """,
@@ -109,24 +71,24 @@ def query_api(question: str, include_details: bool = False):
 
 DASHBOARD_CONFIGS = {
     "NOI Forecast Trend": {
-        "question": "Show top 15 highest NOI properties",
+        "question": "Show the top 15 properties by forecast NOI",
         "chart": "noi_line",
-        "help": "Shows the latest forecast month 15 properties by predicted NOI.",
+        "help": "Shows the latest forecast month top 15 properties by predicted NOI.",
     },
     "Portfolio NOI KPI": {
         "question": "What is the total predicted portfolio NOI?",
         "chart": "metric",
-        "help": "Shows the overall predicted NOI across the forecast portfolio.",
+        "help": "Shows the total expected NOI across the portfolio.",
     },
     "Market Rent Gap Analysis": {
-        "question": "Show latest month top 15 properties by rent gap",
+        "question": "Show the latest month top 15 properties by rent gap with current and market rent",
         "chart": "market_rent_combo",
         "help": "Shows the latest month 15 properties with current portfolio rent, predicted market rent, and rent gap.",
     },
     "Rent Gap Impact": {
-        "question": "Which properties are under-rented in Boston?",
+        "question": "Show the top 15 under-rented properties",
         "chart": "rent_gap_bar",
-        "help": "Highlights rent gap opportunities from the returned result set.",
+        "help": "Highlights the top rent-gap opportunities.",
     },
 }
 
@@ -159,12 +121,6 @@ with st.sidebar:
 - Maintenance risk review
         """
     )
-
-
-def pretty_label(value: str) -> str:
-    if not value:
-        return "N/A"
-    return value.replace("_", " ").title()
 
 
 def to_numeric_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -222,69 +178,24 @@ def render_try_questions():
                 st.session_state["prefill_question"] = q
 
 
-def render_response_meta(item: dict):
-    total_count = item.get("total_count", 0)
-    row_count = item.get("row_count", 0)
-    time_mode = pretty_label(item.get("time_mode", ""))
-    mode = pretty_label(item.get("mode", ""))
-
-    c1, c2 = st.columns(2)
-
-    with c1:
-        st.markdown(
-            f"""
-<div class="snapshot-box">
-    <div class="snapshot-label">Rows Returned</div>
-    <div class="snapshot-value">{row_count}</div>
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-
-    with c2:
-        st.markdown(
-            f"""
-<div class="snapshot-box">
-    <div class="snapshot-label">Total Matches</div>
-    <div class="snapshot-value">{total_count}</div>
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-
-    st.markdown("#### Query Context")
-    st.markdown(
-        f"""
-<div class="query-context">
-    <div><b>Time Mode:</b> {time_mode}</div>
-    <div><b>Mode:</b> {mode}</div>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-
 def render_metric_dashboard(payload: dict):
-    data = payload.get("data", [])
-    df = pd.DataFrame(data)
-
+    df = pd.DataFrame(payload.get("data", []))
     if df.empty:
-        total_from_answer = payload.get("total_count", 0)
-        st.metric("Portfolio NOI KPI", f"{total_from_answer:,}" if total_from_answer else "N/A")
+        st.warning("No data returned for this dashboard.")
         return
 
     df = to_numeric_df(df)
 
-    value = None
-    if "total_predicted_noi" in df.columns:
-        series = pd.to_numeric(df["total_predicted_noi"], errors="coerce").dropna()
-        if not series.empty:
-            value = series.iloc[0]
+    if "total_predicted_noi" not in df.columns:
+        st.warning("Expected KPI field not found.")
+        return
 
-    if value is None:
-        st.warning("No KPI value returned for this dashboard.")
-    else:
-        st.metric("Portfolio NOI KPI", f"${value:,.0f}")
+    series = pd.to_numeric(df["total_predicted_noi"], errors="coerce").dropna()
+    if series.empty:
+        st.warning("No KPI value returned.")
+        return
+
+    st.metric("Portfolio NOI KPI", f"${series.iloc[0]:,.0f}")
 
 
 def render_noi_forecast_trend(payload: dict):
@@ -295,28 +206,21 @@ def render_noi_forecast_trend(payload: dict):
 
     df = to_numeric_df(df)
 
-    required = {"property_id", "predicted_noi"}
-    if not required.issubset(df.columns):
+    needed = {"property_id", "predicted_noi"}
+    if not needed.issubset(df.columns):
         st.warning("Expected columns not found for NOI Forecast Trend dashboard.")
         return
 
     chart_df = df[["property_id", "predicted_noi"]].copy()
     chart_df["predicted_noi"] = pd.to_numeric(chart_df["predicted_noi"], errors="coerce")
-    chart_df = chart_df.dropna(subset=["predicted_noi"])
-    chart_df = chart_df.head(15)
+    chart_df = chart_df.dropna().head(15)
 
     if chart_df.empty:
         st.warning("No valid predicted NOI values returned.")
         return
 
-    fig, ax = plt.subplots(figsize=(12, 4.8))
-    ax.plot(chart_df["property_id"], chart_df["predicted_noi"], marker="o")
-    ax.set_xlabel("Property ID")
-    ax.set_ylabel("Predicted NOI")
-    ax.set_title("Latest Forecast Month - Top 15 Properties by Predicted NOI", fontsize=14)
-    plt.xticks(rotation=45, ha="right")
-    plt.tight_layout()
-    st.pyplot(fig)
+    chart_df = chart_df.set_index("property_id")
+    st.line_chart(chart_df)
 
 
 def render_market_rent_gap_analysis(payload: dict):
@@ -327,8 +231,8 @@ def render_market_rent_gap_analysis(payload: dict):
 
     df = to_numeric_df(df)
 
-    required = {"property_id", "current_portfolio_rent", "predicted_market_rent", "rent_gap"}
-    if not required.issubset(df.columns):
+    needed = {"property_id", "current_portfolio_rent", "predicted_market_rent", "rent_gap"}
+    if not needed.issubset(df.columns):
         st.warning("Expected columns not found for Market Rent Gap Analysis dashboard.")
         return
 
@@ -336,46 +240,19 @@ def render_market_rent_gap_analysis(payload: dict):
     chart_df["current_portfolio_rent"] = pd.to_numeric(chart_df["current_portfolio_rent"], errors="coerce")
     chart_df["predicted_market_rent"] = pd.to_numeric(chart_df["predicted_market_rent"], errors="coerce")
     chart_df["rent_gap"] = pd.to_numeric(chart_df["rent_gap"], errors="coerce")
-    chart_df = chart_df.dropna()
-    chart_df = chart_df.head(15)
+    chart_df = chart_df.dropna().head(15)
 
     if chart_df.empty:
         st.warning("No valid rent comparison values returned.")
         return
 
-    fig, ax1 = plt.subplots(figsize=(13, 5.2))
+    st.markdown("#### Current Portfolio Rent vs Predicted Market Rent")
+    bar_df = chart_df[["property_id", "current_portfolio_rent", "predicted_market_rent"]].set_index("property_id")
+    st.bar_chart(bar_df)
 
-    x = range(len(chart_df))
-    width = 0.38
-
-    ax1.bar(
-        [i - width / 2 for i in x],
-        chart_df["current_portfolio_rent"],
-        width=width,
-        label="Current Portfolio Rent",
-    )
-    ax1.bar(
-        [i + width / 2 for i in x],
-        chart_df["predicted_market_rent"],
-        width=width,
-        label="Predicted Market Rent",
-    )
-    ax1.set_ylabel("Rent")
-    ax1.set_xlabel("Property ID")
-    ax1.set_xticks(list(x))
-    ax1.set_xticklabels(chart_df["property_id"], rotation=45, ha="right")
-
-    ax2 = ax1.twinx()
-    ax2.plot(x, chart_df["rent_gap"], marker="o", label="Rent Gap")
-    ax2.set_ylabel("Rent Gap")
-
-    handles1, labels1 = ax1.get_legend_handles_labels()
-    handles2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(handles1 + handles2, labels1 + labels2, loc="upper left")
-
-    ax1.set_title("Latest Month - Top 15 Properties Rent Comparison", fontsize=14)
-    plt.tight_layout()
-    st.pyplot(fig)
+    st.markdown("#### Rent Gap")
+    line_df = chart_df[["property_id", "rent_gap"]].set_index("property_id")
+    st.line_chart(line_df)
 
 
 def render_rent_gap_impact(payload: dict):
@@ -386,28 +263,21 @@ def render_rent_gap_impact(payload: dict):
 
     df = to_numeric_df(df)
 
-    required = {"property_id", "rent_gap"}
-    if not required.issubset(df.columns):
+    needed = {"property_id", "rent_gap"}
+    if not needed.issubset(df.columns):
         st.warning("Expected columns not found for Rent Gap Impact dashboard.")
         return
 
     chart_df = df[["property_id", "rent_gap"]].copy()
     chart_df["rent_gap"] = pd.to_numeric(chart_df["rent_gap"], errors="coerce")
-    chart_df = chart_df.dropna()
-    chart_df = chart_df.head(15)
+    chart_df = chart_df.dropna().head(15)
 
     if chart_df.empty:
         st.warning("No valid rent gap values returned.")
         return
 
-    fig, ax = plt.subplots(figsize=(12, 4.8))
-    ax.bar(chart_df["property_id"], chart_df["rent_gap"])
-    ax.set_xlabel("Property ID")
-    ax.set_ylabel("Rent Gap")
-    ax.set_title("Rent Gap Impact", fontsize=14)
-    plt.xticks(rotation=45, ha="right")
-    plt.tight_layout()
-    st.pyplot(fig)
+    chart_df = chart_df.set_index("property_id")
+    st.bar_chart(chart_df)
 
 
 if page == "Copilot":
@@ -433,12 +303,6 @@ if page == "Copilot":
                 {
                     "role": "assistant",
                     "text": payload.get("answer", "No answer returned."),
-                    "sql": payload.get("sql", ""),
-                    "count_sql": payload.get("count_sql", ""),
-                    "row_count": payload.get("row_count", 0),
-                    "total_count": payload.get("total_count", 0),
-                    "time_mode": payload.get("time_mode", ""),
-                    "mode": payload.get("mode", ""),
                 }
             )
         except Exception as exc:
@@ -446,12 +310,6 @@ if page == "Copilot":
                 {
                     "role": "assistant",
                     "text": f"Error calling API: {exc}",
-                    "sql": "",
-                    "count_sql": "",
-                    "row_count": 0,
-                    "total_count": 0,
-                    "time_mode": "",
-                    "mode": "error",
                 }
             )
 
@@ -462,17 +320,6 @@ if page == "Copilot":
         else:
             with st.chat_message("assistant"):
                 st.markdown(item["text"])
-                st.markdown("### Snapshot")
-                render_response_meta(item)
-
-                if item.get("sql") or item.get("count_sql"):
-                    with st.expander("SQL used"):
-                        if item.get("count_sql"):
-                            st.markdown("**Count SQL**")
-                            st.code(item["count_sql"], language="sql")
-                        if item.get("sql"):
-                            st.markdown("**Detail SQL**")
-                            st.code(item["sql"], language="sql")
 
     if not st.session_state.history:
         st.info("Ask a question to see AI insights.")
@@ -500,16 +347,12 @@ else:
 
         if dashboard_name == "NOI Forecast Trend":
             render_noi_forecast_trend(payload)
-
         elif dashboard_name == "Portfolio NOI KPI":
             render_metric_dashboard(payload)
-
         elif dashboard_name == "Market Rent Gap Analysis":
             render_market_rent_gap_analysis(payload)
-
         elif dashboard_name == "Rent Gap Impact":
             render_rent_gap_impact(payload)
-
         else:
             st.warning("Unsupported dashboard configuration.")
 
