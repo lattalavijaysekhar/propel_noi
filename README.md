@@ -149,7 +149,6 @@ The user interface is built using **Streamlit**.
 
 Features include:
 
-- Portfolio performance dashboard
 - NOI forecast visualization
 - Market rent gap analysis
 - Maintenance risk insights
