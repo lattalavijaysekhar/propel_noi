@@ -47,10 +47,21 @@ html, body, [class*="css"] {
     margin-bottom: 0.35rem;
 }
 
-/* Force consistent font color and size for numbers */
-[data-testid="stMarkdownContainer"] code,
-[data-testid="stMarkdownContainer"] span,
-[data-testid="stMarkdownContainer"] strong {
+/* Keep headings untouched */
+h1, h2, h3 {
+    font-size: revert !important;
+}
+
+/* Only normalize bullet / paragraph text */
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li {
+    font-size: 12px !important;
+    color: #1f2937 !important;
+}
+
+/* Normalize number spans without affecting titles */
+[data-testid="stMarkdownContainer"] li span,
+[data-testid="stMarkdownContainer"] li strong {
     font-size: 12px !important;
     color: #1f2937 !important;
 }
