@@ -71,7 +71,7 @@ def query_api(question: str, include_details: bool = False):
 
 DASHBOARD_CONFIGS = {
     "NOI Forecast Trend": {
-        "question": "Show the top 15 properties by forecast NOI",
+        "question": "Show the top 15 properties by forecast NOI.",
         "chart": "noi_line",
         "help": "Shows the latest forecast month top 15 properties by predicted NOI.",
     },
@@ -81,12 +81,12 @@ DASHBOARD_CONFIGS = {
         "help": "Shows the total expected NOI across the portfolio.",
     },
     "Market Rent Gap Analysis": {
-        "question": "Show the latest month top 15 properties by rent gap with current and market rent",
+        "question": "Show the latest month top 15 properties by rent gap with current and market rent.",
         "chart": "market_rent_combo",
         "help": "Shows the latest month 15 properties with current portfolio rent, predicted market rent, and rent gap.",
     },
     "Rent Gap Impact": {
-        "question": "Show the top 15 under-rented properties",
+        "question": "Show top 15 under-rented properties.",
         "chart": "rent_gap_bar",
         "help": "Highlights the top rent-gap opportunities.",
     },
@@ -128,6 +128,16 @@ def to_numeric_df(df: pd.DataFrame) -> pd.DataFrame:
     for col in out.columns:
         out[col] = pd.to_numeric(out[col], errors="ignore")
     return out
+
+
+def extract_final_business_insight(answer_text: str) -> str:
+    if not answer_text:
+        return ""
+    lines = [line.strip() for line in answer_text.splitlines() if line.strip()]
+    for line in reversed(lines):
+        if "business insight:" in line.lower():
+            return line
+    return lines[-1] if lines else ""
 
 
 def render_try_questions():
@@ -246,13 +256,12 @@ def render_market_rent_gap_analysis(payload: dict):
         st.warning("No valid rent comparison values returned.")
         return
 
-    st.markdown("#### Current Portfolio Rent vs Predicted Market Rent")
-    bar_df = chart_df[["property_id", "current_portfolio_rent", "predicted_market_rent"]].set_index("property_id")
-    st.bar_chart(bar_df)
-
-    st.markdown("#### Rent Gap")
-    line_df = chart_df[["property_id", "rent_gap"]].set_index("property_id")
-    st.line_chart(line_df)
+    st.bar_chart(
+        chart_df[["property_id", "current_portfolio_rent", "predicted_market_rent"]].set_index("property_id")
+    )
+    st.line_chart(
+        chart_df[["property_id", "rent_gap"]].set_index("property_id")
+    )
 
 
 def render_rent_gap_impact(payload: dict):
@@ -276,8 +285,7 @@ def render_rent_gap_impact(payload: dict):
         st.warning("No valid rent gap values returned.")
         return
 
-    chart_df = chart_df.set_index("property_id")
-    st.bar_chart(chart_df)
+    st.bar_chart(chart_df.set_index("property_id"))
 
 
 if page == "Copilot":
@@ -341,9 +349,12 @@ else:
         with st.spinner("Loading dashboard..."):
             payload = query_api(config["question"], include_details=True)
 
-        if payload.get("answer"):
+        insight_text = payload.get("answer", "")
+        final_insight = extract_final_business_insight(insight_text)
+
+        if final_insight:
             st.markdown("#### Business Insight")
-            st.markdown(payload["answer"])
+            st.markdown(final_insight)
 
         if dashboard_name == "NOI Forecast Trend":
             render_noi_forecast_trend(payload)
