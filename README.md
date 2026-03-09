@@ -162,6 +162,7 @@ Features include:
 ---
 
 # AI Copilot - Prebuilt Analytics Dashboards
+- It also provides the below Prebuilt Analytics Dashboards
 ## NOI Forecast Trend
  - Shows predicted property income using ML forecasting
  - Helps evaluate future portfolio performance
@@ -172,7 +173,6 @@ Features include:
  - Highlights revenue optimization opportunities
 ## Rent Gap Impact
  - Highlights the top rent-gap opportunities.
-<img width="749" height="615" alt="image" src="https://github.com/user-attachments/assets/e8eb1b72-59fa-4caa-b33f-1f8aeb0bbdca" />
 
 
 # Working Prototype
