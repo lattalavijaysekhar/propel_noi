@@ -64,7 +64,7 @@ h3 {
 
 .try-card {
     padding: 0.9rem;
-    border-radius: 14px;
+    border-radius: 12px;
     background: #f9fafb;
     border: 1px solid #e5e7eb;
     margin-bottom: 0.7rem;
