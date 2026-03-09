@@ -157,7 +157,7 @@ Features include:
 ---
 
 # AI Copilot - Prebuilt Analytics Dashboards
-- It also provides the below Prebuilt Analytics Dashboards
+It also provides the below Prebuilt Analytics Dashboards
 ## NOI Forecast Trend
  - Shows predicted property income using ML forecasting
  - Helps evaluate future portfolio performance
