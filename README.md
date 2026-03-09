@@ -121,6 +121,7 @@ outputs/
 | DeepAR Time Series Model | Forecast NOI |
 | XGBoost Regression | Predict market rent |
 | Random Forest Classifier | Detect maintenance risk |
+| APAC Claude Sonnet 4 | AI Copilot Insights |
 
 All models are trained and deployed using **Amazon SageMaker**.
 
