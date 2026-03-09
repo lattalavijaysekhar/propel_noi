@@ -62,20 +62,15 @@ The system is delivered through a **Streamlit SaaS-style interface**.
 
 ---
 
-# Architecture Overview
-
+# Archictecture Diagram
 The solution uses a **serverless AWS architecture**.
 
-Data Sources  
-→ Amazon S3 Data Lake  
-→ AWS Glue ETL Processing  
-→ Amazon Athena Query Layer  
-→ SageMaker Machine Learning Models  
-→ Amazon Bedrock Generative AI  
-→ AWS Lambda APIs  
-→ Streamlit AI Copilot Interface
+<img width="1382" height="688" alt="image" src="https://github.com/user-attachments/assets/daef322e-3b69-4bca-a189-6419609e43ee" />
 
----
+# Process Flow
+
+<img width="1382" height="688" alt="image" src="https://github.com/user-attachments/assets/41eabee8-6b4b-4887-b0fc-72c26e7dc145" />
+
 
 # AWS Services Used
 
@@ -179,16 +174,15 @@ Features include:
 
 https://lattalavijaysekhar-propel-noi-streamlit-appapp-ry76gn.streamlit.app/
 
-
 ---
 
 # Demo Video
 
 PropelNOI: AI-Driven Margin Optimization for Real Estate Explanation:
-[https://drive.google.com/file/d/1A2TAKlKfOxULYOy8BIt8JRkbifmkT3LT/view?usp=drive_link]
+https://drive.google.com/file/d/1A2TAKlKfOxULYOy8BIt8JRkbifmkT3LT/view?usp=drive_link
 
 PropelNOI: AI-Driven Margin Optimization for Real Estate Demonstration:
-[https://drive.google.com/file/d/1RaaonBRSQijesv4KKWXSii2B3USyC6Pu/view?usp=drive_link]
+https://drive.google.com/file/d/1RaaonBRSQijesv4KKWXSii2B3USyC6Pu/view?usp=drive_link
 
 ---
 
