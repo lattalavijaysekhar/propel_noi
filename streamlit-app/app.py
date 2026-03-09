@@ -14,19 +14,29 @@ st.markdown(
     """
 <style>
 .block-container {
-    padding-top: 1.2rem;
+    padding-top: 1rem;
     padding-bottom: 2rem;
 }
-.dashboard-card {
-    padding: 1rem;
-    border-radius: 14px;
-    background: #f7f9fc;
-    border: 1px solid #e6ebf2;
+
+/* General font sizing */
+html, body, [class*="css"] {
+    font-size: 12px;
 }
+
+/* Dashboard subheaders */
+.dashboard-subheader {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+}
+
+/* Small helper text */
 .small-note {
-    font-size: 0.85rem;
+    font-size: 12px;
     color: #6b7280;
 }
+
+/* Try-question cards */
 .try-card {
     padding: 0.9rem;
     border-radius: 14px;
@@ -34,10 +44,39 @@ st.markdown(
     border: 1px solid #e5e7eb;
     margin-bottom: 0.7rem;
 }
+
 .section-title {
-    font-size: 1rem;
+    font-size: 14px;
     font-weight: 600;
     margin-bottom: 0.35rem;
+}
+
+/* Snapshot cards */
+.snapshot-box {
+    padding: 0.8rem 1rem;
+    border-radius: 14px;
+    background: #f7f9fc;
+    border: 1px solid #e6ebf2;
+    min-height: 90px;
+}
+.snapshot-label {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 0.25rem;
+}
+.snapshot-value {
+    font-size: 26px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+/* Query context block */
+.query-context {
+    padding: 0.8rem 1rem;
+    border-radius: 14px;
+    background: #fbfcfe;
+    border: 1px solid #e6ebf2;
+    font-size: 12px;
 }
 </style>
 """,
@@ -49,13 +88,12 @@ if "history" not in st.session_state:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def query_api(question: str, include_details: bool = False, max_rows: int = 10):
+def query_api(question: str):
     response = requests.post(
         API_URL,
         json={
             "question": question,
-            "include_details": include_details,
-            "max_rows": max_rows,
+            "include_details": False,
         },
         timeout=120,
     )
@@ -63,14 +101,14 @@ def query_api(question: str, include_details: bool = False, max_rows: int = 10):
     return response.json()
 
 
+# Updated dashboard list
 DASHBOARD_CONFIGS = {
     "NOI Forecast Trend": {
-        "question": "Show forecast_month, property_id, predicted_noi from output_noi_forecast_ml for 10 properties ordered by forecast_month",
-        "chart": "line",
-        "x": "forecast_month",
+        "question": "Show the latest forecast month top 15 properties with property_id and predicted_noi ordered by predicted_noi descending",
+        "chart": "line_single_metric",
+        "x": "property_id",
         "y": "predicted_noi",
-        "series": "property_id",
-        "help": "Predicted NOI trajectory across future months.",
+        "help": "Shows the latest forecast month top 15 properties by predicted NOI.",
     },
     "Portfolio NOI KPI": {
         "question": "What is the total predicted portfolio NOI?",
@@ -79,39 +117,20 @@ DASHBOARD_CONFIGS = {
         "help": "Total expected NOI across the portfolio.",
     },
     "Market Rent Gap Analysis": {
-        "question": "Show the latest month market rent comparison with property_id, current_portfolio_rent and predicted_market_rent for the top 15 rent gap opportunities",
-        "chart": "bar_compare",
+        "question": "Show the latest month top 15 properties with property_id, current_portfolio_rent, predicted_market_rent, and rent_gap ordered by absolute rent_gap descending",
+        "chart": "market_rent_combo",
         "x": "property_id",
-        "y1": "current_portfolio_rent",
-        "y2": "predicted_market_rent",
-        "help": "Compares current portfolio rent against predicted market rent.",
+        "bar1": "current_portfolio_rent",
+        "bar2": "predicted_market_rent",
+        "line": "rent_gap",
+        "help": "Shows latest month top 15 properties comparing current rent vs predicted market rent, with rent gap overlay.",
     },
     "Rent Gap Impact": {
-        "question": "Show latest month rent gap by property_id for top 15 opportunity properties ordered by absolute rent_gap descending",
+        "question": "Show latest month top 15 properties with property_id and rent_gap ordered by absolute rent_gap descending",
         "chart": "bar",
         "x": "property_id",
         "y": "rent_gap",
-        "help": "Highlights revenue uplift opportunity if rents are aligned to market.",
-    },
-    "Maintenance Risk Distribution": {
-        "question": "Show maintenance risk distribution by risk_level",
-        "chart": "bar",
-        "x": "risk_level",
-        "y": "property_count",
-        "help": "Shows the portfolio mix of high, medium, and low risk assets.",
-    },
-    "High-Risk Assets Table": {
-        "question": "Show high-risk maintenance assets with property_id, asset_type, risk_score, risk_level",
-        "chart": "table",
-        "help": "Lists assets needing immediate maintenance attention.",
-    },
-    "Maintenance Risk Heatmap": {
-        "question": "Show maintenance risk scores by property_id and asset_type",
-        "chart": "heatmap",
-        "rows": "property_id",
-        "cols": "asset_type",
-        "values": "risk_score",
-        "help": "Quickly identifies critical assets by property and asset type.",
+        "help": "Highlights the latest month top 15 rent gap opportunities.",
     },
 }
 
@@ -147,11 +166,10 @@ with st.sidebar:
     )
 
 
-def render_dataframe(df: pd.DataFrame):
-    working_df = df.copy()
-    for col in working_df.columns:
-        working_df[col] = pd.to_numeric(working_df[col], errors="ignore")
-    st.dataframe(working_df, use_container_width=True)
+def pretty_label(value: str) -> str:
+    if not value:
+        return "N/A"
+    return value.replace("_", " ").title()
 
 
 def render_try_questions():
@@ -161,7 +179,7 @@ def render_try_questions():
 
     with c1:
         st.markdown(
-            f"""
+            """
 <div class="try-card">
     <div class="section-title">NOI Forecasting</div>
     <div class="small-note">Sample questions for forecast horizon, property outlook, and ranking.</div>
@@ -175,7 +193,7 @@ def render_try_questions():
 
     with c2:
         st.markdown(
-            f"""
+            """
 <div class="try-card">
     <div class="section-title">Market Rent Prediction</div>
     <div class="small-note">Sample questions for under-rented and over-rented opportunity detection.</div>
@@ -189,7 +207,7 @@ def render_try_questions():
 
     with c3:
         st.markdown(
-            f"""
+            """
 <div class="try-card">
     <div class="section-title">Maintenance Risk Detection</div>
     <div class="small-note">Sample questions for risk distribution and high-risk asset prioritization.</div>
@@ -203,27 +221,50 @@ def render_try_questions():
 
 
 def render_response_meta(item: dict):
-    total_count = item.get("total_count")
-    row_count = item.get("row_count")
-    time_mode = item.get("time_mode", "")
-    mode = item.get("mode", "")
+    total_count = item.get("total_count", 0)
+    row_count = item.get("row_count", 0)
+    time_mode = pretty_label(item.get("time_mode", ""))
+    mode = pretty_label(item.get("mode", ""))
 
-    cols = st.columns(4)
-    cols[0].metric("Rows Returned", row_count if row_count is not None else 0)
-    cols[1].metric("Total Matches", total_count if total_count is not None else 0)
-    cols[2].metric("Time Mode", time_mode if time_mode else "N/A")
-    cols[3].metric("Mode", mode if mode else "N/A")
+    c1, c2 = st.columns(2)
+
+    with c1:
+        st.markdown(
+            f"""
+<div class="snapshot-box">
+    <div class="snapshot-label">Rows Returned</div>
+    <div class="snapshot-value">{row_count}</div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+    with c2:
+        st.markdown(
+            f"""
+<div class="snapshot-box">
+    <div class="snapshot-label">Total Matches</div>
+    <div class="snapshot-value">{total_count}</div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("#### Query Context")
+    st.markdown(
+        f"""
+<div class="query-context">
+    <div><b>Time Mode:</b> {time_mode}</div>
+    <div><b>Mode:</b> {mode}</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
 
 if page == "Copilot":
     st.title("🏢 PropelNOI AI Copilot")
     st.caption("Ask natural-language questions about rent optimization, NOI forecasts, and portfolio insights.")
-
-    top_left, top_right = st.columns([3, 1])
-    with top_left:
-        show_details = st.toggle("Show result details", value=False)
-    with top_right:
-        max_rows = st.selectbox("Rows", [5, 10, 20], index=1)
 
     render_try_questions()
     st.markdown("---")
@@ -238,13 +279,12 @@ if page == "Copilot":
 
         try:
             with st.spinner("Analyzing portfolio data..."):
-                payload = query_api(question, include_details=show_details, max_rows=max_rows)
+                payload = query_api(question)
 
             st.session_state.history.append(
                 {
                     "role": "assistant",
                     "text": payload.get("answer", "No answer returned."),
-                    "data": payload.get("data", []),
                     "sql": payload.get("sql", ""),
                     "count_sql": payload.get("count_sql", ""),
                     "row_count": payload.get("row_count", 0),
@@ -258,7 +298,6 @@ if page == "Copilot":
                 {
                     "role": "assistant",
                     "text": f"Error calling API: {exc}",
-                    "data": [],
                     "sql": "",
                     "count_sql": "",
                     "row_count": 0,
@@ -275,7 +314,7 @@ if page == "Copilot":
         else:
             with st.chat_message("assistant"):
                 st.markdown(item["text"])
-                st.markdown("#### Snapshot")
+                st.markdown("### Snapshot")
                 render_response_meta(item)
 
                 if item.get("sql") or item.get("count_sql"):
@@ -287,35 +326,34 @@ if page == "Copilot":
                             st.markdown("**Detail SQL**")
                             st.code(item["sql"], language="sql")
 
-                if item.get("data"):
-                    with st.expander(f"Result details ({item.get('row_count', len(item['data']))} rows)"):
-                        render_dataframe(pd.DataFrame(item["data"]))
-
     if not st.session_state.history:
-        st.info("Ask a question to see AI insights and optional result details.")
+        st.info("Ask a question to see AI insights.")
 
 else:
     st.title("📊 PropelNOI Dashboards")
-    st.caption("Prebuilt dashboard views for NOI forecasting, market rent analysis, and maintenance risk monitoring.")
+    st.caption("Prebuilt dashboard views for NOI forecasting and market rent analysis.")
 
     dashboard_name = st.selectbox("Choose a dashboard", list(DASHBOARD_CONFIGS.keys()))
     config = DASHBOARD_CONFIGS[dashboard_name]
 
-    left, right = st.columns([4, 1])
-    with left:
-        st.markdown(f"### {dashboard_name}")
-        st.write(config["help"])
-    with right:
-        if st.button("Refresh dashboard", use_container_width=True):
-            query_api.clear()
+    st.markdown(f'<div class="dashboard-subheader">{dashboard_name}</div>', unsafe_allow_html=True)
+    st.write(config["help"])
 
     try:
         with st.spinner("Loading dashboard..."):
-            payload = query_api(config["question"], include_details=True, max_rows=50)
+            payload = query_api(config["question"])
 
-        st.markdown(payload.get("answer", ""))
+        if payload.get("answer"):
+            st.markdown("#### Business Insight")
+            st.markdown(payload["answer"])
 
         df = pd.DataFrame(payload.get("data", []))
+
+        # Fallback: if API does not return data because include_details=False,
+        # still try to use fields if present in payload
+        if df.empty and "data" in payload and payload["data"]:
+            df = pd.DataFrame(payload["data"])
+
         if df.empty:
             st.warning("No data returned for this dashboard.")
         else:
@@ -333,27 +371,13 @@ else:
                     metric_value = pd.to_numeric(df.iloc[:, 0], errors="coerce").dropna().sum()
 
                 st.metric(dashboard_name, f"${metric_value:,.0f}" if metric_value is not None else "N/A")
-                render_dataframe(df)
 
-            elif chart_type == "line":
+            elif chart_type == "line_single_metric":
                 x_col = config["x"]
                 y_col = config["y"]
-                series_col = config["series"]
-                chart_df = df[[x_col, series_col, y_col]].copy()
+                chart_df = df[[x_col, y_col]].copy().set_index(x_col)
                 chart_df[y_col] = pd.to_numeric(chart_df[y_col], errors="coerce")
-                pivot_df = chart_df.pivot_table(index=x_col, columns=series_col, values=y_col, aggfunc="sum")
-                st.line_chart(pivot_df)
-                render_dataframe(df)
-
-            elif chart_type == "bar_compare":
-                x_col = config["x"]
-                y1 = config["y1"]
-                y2 = config["y2"]
-                chart_df = df[[x_col, y1, y2]].copy().set_index(x_col)
-                chart_df[y1] = pd.to_numeric(chart_df[y1], errors="coerce")
-                chart_df[y2] = pd.to_numeric(chart_df[y2], errors="coerce")
-                st.bar_chart(chart_df)
-                render_dataframe(df)
+                st.line_chart(chart_df)
 
             elif chart_type == "bar":
                 x_col = config["x"]
@@ -361,20 +385,19 @@ else:
                 chart_df = df[[x_col, y_col]].copy().set_index(x_col)
                 chart_df[y_col] = pd.to_numeric(chart_df[y_col], errors="coerce")
                 st.bar_chart(chart_df)
-                render_dataframe(df)
 
-            elif chart_type == "heatmap":
-                pivot_df = df.pivot_table(
-                    index=config["rows"],
-                    columns=config["cols"],
-                    values=config["values"],
-                    aggfunc="max",
-                )
-                st.dataframe(pivot_df, use_container_width=True)
-                render_dataframe(df)
+            elif chart_type == "market_rent_combo":
+                st.markdown("#### Current Portfolio Rent vs Predicted Market Rent")
+                chart_df = df[[config["x"], config["bar1"], config["bar2"]]].copy().set_index(config["x"])
+                chart_df[config["bar1"]] = pd.to_numeric(chart_df[config["bar1"]], errors="coerce")
+                chart_df[config["bar2"]] = pd.to_numeric(chart_df[config["bar2"]], errors="coerce")
+                st.bar_chart(chart_df)
 
-            else:
-                render_dataframe(df)
+                if config["line"] in df.columns:
+                    st.markdown("#### Rent Gap Trend")
+                    line_df = df[[config["x"], config["line"]]].copy().set_index(config["x"])
+                    line_df[config["line"]] = pd.to_numeric(line_df[config["line"]], errors="coerce")
+                    st.line_chart(line_df)
 
     except Exception as exc:
         st.error(f"Unable to load dashboard: {exc}")
