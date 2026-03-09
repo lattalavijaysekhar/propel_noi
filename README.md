@@ -178,7 +178,6 @@ Features include:
 # Working Prototype
 
 https://lattalavijaysekhar-propel-noi-streamlit-appapp-ry76gn.streamlit.app/
-<img width="1075" height="62" alt="image" src="https://github.com/user-attachments/assets/b57a3ffa-5872-4ba8-8423-aaf8c1893676" />
 
 
 ---
@@ -186,13 +185,10 @@ https://lattalavijaysekhar-propel-noi-streamlit-appapp-ry76gn.streamlit.app/
 # Demo Video
 
 PropelNOI: AI-Driven Margin Optimization for Real Estate Explanation:
-[https://www.loom.com/share/21ef883d9f444b998e52d17bce0e803b](https://drive.google.com/file/d/1A2TAKlKfOxULYOy8BIt8JRkbifmkT3LT/view?usp=drive_link
-)
+[https://drive.google.com/file/d/1A2TAKlKfOxULYOy8BIt8JRkbifmkT3LT/view?usp=drive_link]
 
 PropelNOI: AI-Driven Margin Optimization for Real Estate Demonstration:
-https://drive.google.com/file/d/1RaaonBRSQijesv4KKWXSii2B3USyC6Pu/view?usp=drive_link
-<img width="1328" height="62" alt="image" src="https://github.com/user-attachments/assets/9805e90b-a86d-4815-ab3b-46d25186b638" />
-
+[https://drive.google.com/file/d/1RaaonBRSQijesv4KKWXSii2B3USyC6Pu/view?usp=drive_link]
 
 ---
 
