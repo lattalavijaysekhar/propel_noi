@@ -22,9 +22,22 @@ html, body, [class*="css"] {
     font-size: 12px;
 }
 
+/* Make markdown text consistent everywhere */
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stMarkdownContainer"] span,
+[data-testid="stMarkdownContainer"] strong,
+[data-testid="stMarkdownContainer"] em {
+    font-size: 12px !important;
+    color: #1f2937 !important;
+    line-height: 1.6 !important;
+}
+
+/* Dashboard subheader should stay 14 */
 .dashboard-subheader {
-    font-size: 14px;
+    font-size: 14px !important;
     font-weight: 600;
+    color: #1f2937 !important;
     margin-bottom: 0.35rem;
 }
 
