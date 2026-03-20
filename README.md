@@ -65,7 +65,8 @@ The system is delivered through a **Streamlit SaaS-style interface**.
 # Archictecture Diagram
 The solution uses a **serverless AWS architecture**.
 
-<img width="1382" height="688" alt="image" src="https://github.com/user-attachments/assets/daef322e-3b69-4bca-a189-6419609e43ee" />
+<img width="1390" height="687" alt="image" src="https://github.com/user-attachments/assets/77007c08-8dcd-4685-90d0-70b4dc9bda01" />
+
 
 # Process Flow
 
