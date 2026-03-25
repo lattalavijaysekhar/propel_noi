@@ -1,3 +1,4 @@
+import html
 import pandas as pd
 import requests
 import streamlit as st
@@ -74,6 +75,32 @@ h3 {
     font-size: 14px;
     font-weight: 600;
     margin-bottom: 0.35rem;
+}
+
+.ai-response {
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: #ffffff;
+    padding: 1rem 1rem 0.25rem 1rem;
+    margin-top: 0.25rem;
+}
+.ai-section {
+    margin-bottom: 0.9rem;
+}
+.ai-section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 0.3rem;
+}
+.ai-section ul {
+    margin: 0.1rem 0 0.1rem 1rem;
+    padding-left: 0.6rem;
+}
+.ai-section li {
+    margin-bottom: 0.3rem;
+    color: #1f2937;
+    line-height: 1.55;
 }
 </style>
 """,
@@ -168,6 +195,51 @@ def extract_final_business_insight(answer_text: str) -> str:
             return line
     return lines[-1] if lines else ""
 
+
+
+SECTION_ORDER = [
+    "Summary",
+    "Rent Optimization",
+    "Quick Wins",
+    "Risks",
+    "Business Insight",
+]
+
+
+def render_assistant_response(text: str):
+    if not text:
+        st.info("No response returned.")
+        return
+
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    sections = {}
+    current_section = None
+
+    for line in lines:
+        if line in SECTION_ORDER:
+            current_section = line
+            sections[current_section] = []
+            continue
+        if current_section:
+            item = line.lstrip("-").strip()
+            if item:
+                sections[current_section].append(item)
+
+    if not sections:
+        st.markdown(text)
+        return
+
+    blocks = ['<div class="ai-response">']
+    for section in SECTION_ORDER:
+        if section not in sections:
+            continue
+        blocks.append(f'<div class="ai-section"><div class="ai-section-title">{html.escape(section)}</div><ul>')
+        for item in sections[section]:
+            blocks.append(f"<li>{html.escape(item)}</li>")
+        blocks.append("</ul></div>")
+    blocks.append("</div>")
+
+    st.markdown("".join(blocks), unsafe_allow_html=True)
 
 def render_try_questions():
     st.markdown("### Try these questions")
@@ -356,7 +428,7 @@ if page == "Copilot":
                 st.write(item["text"])
         else:
             with st.chat_message("assistant"):
-                st.markdown(item["text"])
+                render_assistant_response(item["text"])
 
     if not st.session_state.history:
         st.info("Ask a question to see AI insights.")
